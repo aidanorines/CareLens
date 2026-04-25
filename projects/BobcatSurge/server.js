@@ -23,7 +23,7 @@ app.get("/patients", (req, res) => {
   });
 });
 
-app.post("/patients/upload", (req, res) => {
+app.post("/patients/analyze", (req, res) => {
   const patientData = req.body;
 
   if (!patientData.age || !patientData.vitals) {
@@ -34,10 +34,13 @@ app.post("/patients/upload", (req, res) => {
 
   const risks = riskEngine.analyze(patientData);
 
+  const summary = summaryGenerator.generate(patientData, risks);
+
   res.status(201).json({
     message: "Patient analyzed successfully",
     patient: patientData,
-    risks: risks
+    risks: risks,
+    summary: summary
   });
 });
 
