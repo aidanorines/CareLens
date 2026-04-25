@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react";
 import { Link } from "react-router-dom";
-import { getPatients } from "../api/patients";
+import { getAssessments, getPatients } from "../api/patients";
 import EmptyState from "../components/EmptyState";
 import LoadingState from "../components/LoadingState";
-import type { Patient, RiskLevel } from "../types/patient";
+import type { Assessment, Patient, RiskLevel } from "../types/patient";
 
 const riskStyles: Record<RiskLevel, string> = {
   High: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
@@ -20,12 +20,14 @@ const riskIcons: Record<RiskLevel, typeof ShieldAlert> = {
 
 export default function PatientListPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadPatients() {
-      const data = await getPatients();
+      const [data, assessmentData] = await Promise.all([getPatients(), getAssessments()]);
       setPatients(data);
+      setAssessments(assessmentData);
       setLoading(false);
     }
 
@@ -62,7 +64,9 @@ export default function PatientListPage() {
 
       <div className="grid gap-4">
         {patients.map((patient) => {
-          const RiskIcon = riskIcons[patient.riskLevel];
+          const assessment = assessments.find((item) => item.patientId === patient.id);
+          const riskLevel = assessment?.riskLevel ?? "Low";
+          const RiskIcon = riskIcons[riskLevel];
 
           return (
             <Link
@@ -75,20 +79,23 @@ export default function PatientListPage() {
                   <div className="flex items-center gap-3">
                     <h2 className="text-xl font-semibold text-slate-900">{patient.name}</h2>
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${riskStyles[patient.riskLevel]}`}
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${riskStyles[riskLevel]}`}
                     >
                       <RiskIcon className="h-3.5 w-3.5" />
-                      {patient.riskLevel} Risk
+                      {riskLevel} Risk
                     </span>
                   </div>
                   <p className="mt-2 text-sm text-slate-600">
-                    Age {patient.age} • {patient.conditionSummary}
+                    Age {patient.age} • {patient.sex} • {patient.conditions.join(", ")}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3 text-sm text-slate-500">
                   <span>
-                    Updated {new Date(patient.lastUpdated).toLocaleDateString()}
+                    Assessed{" "}
+                    {assessment
+                      ? new Date(assessment.createdAt).toLocaleDateString()
+                      : "pending"}
                   </span>
                   <span className="flex items-center gap-1 font-medium text-brand-700">
                     View dashboard

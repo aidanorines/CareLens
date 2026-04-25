@@ -1,20 +1,25 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, FileText, Stethoscope } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
-import { getPatientById } from "../api/patients";
+import { getAssessmentByPatientId, getPatientById } from "../api/patients";
 import EmptyState from "../components/EmptyState";
 import LoadingState from "../components/LoadingState";
-import type { Patient } from "../types/patient";
+import type { Assessment, Patient } from "../types/patient";
 
 export default function PatientDashboardPage() {
   const { id = "" } = useParams();
   const [patient, setPatient] = useState<Patient | undefined>();
+  const [assessment, setAssessment] = useState<Assessment | undefined>();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadPatient() {
-      const data = await getPatientById(id);
+      const [data, assessmentData] = await Promise.all([
+        getPatientById(id),
+        getAssessmentByPatientId(id),
+      ]);
       setPatient(data);
+      setAssessment(assessmentData);
       setLoading(false);
     }
 
@@ -55,11 +60,13 @@ export default function PatientDashboardPage() {
               {patient.name}
             </h1>
             <p className="mt-2 text-sm text-slate-600">
-              Age {patient.age} • Risk level: {patient.riskLevel}
+              Age {patient.age} • {patient.sex} • Risk level:{" "}
+              {assessment?.riskLevel ?? "Pending"}
             </p>
           </div>
           <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Last updated {new Date(patient.lastUpdated).toLocaleString()}
+            Last assessed{" "}
+            {assessment ? new Date(assessment.createdAt).toLocaleString() : "pending"}
           </div>
         </div>
       </div>
@@ -76,8 +83,8 @@ export default function PatientDashboardPage() {
             </div>
           </div>
           <p className="mt-4 text-sm leading-7 text-slate-600">
-            {patient.conditionSummary} This panel is reserved for a generated clinical summary,
-            timeline highlights, and notable changes once the Node.js + Express API is connected.
+            {assessment?.summary ??
+              "No assessment summary is available for this demo patient yet."}
           </p>
         </article>
 
@@ -88,13 +95,17 @@ export default function PatientDashboardPage() {
             </div>
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Risk Flags</h2>
-              <p className="text-sm text-slate-500">Placeholder clinical risk indicators</p>
+              <p className="text-sm text-slate-500">
+                {assessment ? `Risk score ${assessment.riskScore}` : "Assessment pending"}
+              </p>
             </div>
           </div>
           <ul className="mt-4 space-y-3 text-sm text-slate-600">
-            <li className="rounded-2xl bg-slate-50 px-4 py-3">Potential readmission risk</li>
-            <li className="rounded-2xl bg-slate-50 px-4 py-3">Medication follow-up needed</li>
-            <li className="rounded-2xl bg-slate-50 px-4 py-3">Care plan review pending</li>
+            {(assessment?.flags ?? ["No risk flags available"]).map((flag) => (
+              <li key={flag} className="rounded-2xl bg-slate-50 px-4 py-3">
+                {flag}
+              </li>
+            ))}
           </ul>
         </article>
       </div>
@@ -110,9 +121,16 @@ export default function PatientDashboardPage() {
           </div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Vitals trend cards</div>
-          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Medication adherence panel</div>
-          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Care team notes and actions</div>
+          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+            BP {patient.vitals.bloodPressure ?? "not recorded"} • HR{" "}
+            {patient.vitals.heartRate ?? "not recorded"}
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+            Medications: {patient.medications.join(", ")}
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+            Encounters: {patient.encounters?.length ?? 0} recent
+          </div>
         </div>
       </article>
     </section>
