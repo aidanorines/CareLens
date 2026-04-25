@@ -1,4 +1,13 @@
-import { ArrowLeft, ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react";
+import { useState } from "react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldQuestion,
+  Sparkles,
+} from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import AssessmentHistory from "../components/dashboard/AssessmentHistory";
 import ConditionsCard from "../components/dashboard/ConditionsCard";
@@ -24,6 +33,8 @@ const riskIcons: Record<RiskLevel, typeof ShieldAlert> = {
 
 export default function PatientDashboardPage() {
   const { id = "" } = useParams();
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisMessage, setAnalysisMessage] = useState("");
   const patient = mockPatients.find((currentPatient) => currentPatient.id === id);
   const patientAssessments = mockAssessments
     .filter((assessment) => assessment.patientId === id)
@@ -53,6 +64,19 @@ export default function PatientDashboardPage() {
 
   const riskLevel = assessment?.riskLevel;
   const RiskIcon = riskLevel ? riskIcons[riskLevel] : ShieldQuestion;
+
+  async function handleAnalyzePatient() {
+    setIsAnalyzing(true);
+    setAnalysisMessage("");
+
+    // API integration point: call POST /patients/:id/analyze here when the backend is ready.
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 900);
+    });
+
+    setIsAnalyzing(false);
+    setAnalysisMessage("Analysis completed successfully");
+  }
 
   return (
     <section className="space-y-6">
@@ -100,6 +124,36 @@ export default function PatientDashboardPage() {
               </div>
             </div>
           </div>
+
+          <div className="mt-6 flex flex-col gap-3 border-t border-sky-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Clinical AI analysis</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Run a demo analysis against the current synthetic patient record.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleAnalyzePatient}
+              disabled={isAnalyzing}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-brand-400"
+            >
+              {isAnalyzing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {isAnalyzing ? "Analyzing..." : "Analyze Patient"}
+            </button>
+          </div>
+
+          {analysisMessage && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              {analysisMessage}
+            </div>
+          )}
         </div>
       </article>
 
