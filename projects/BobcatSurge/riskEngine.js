@@ -17,6 +17,28 @@ function analyze(patient) {
     });
   }
 
+  // BMI check
+  if (patient.vitals.bmi > 30) {
+    risks.push({
+      type: "High BMI",
+      severity: "Medium",
+      reason: "BMI is above 30 (obesity range)"
+    });
+  }
+
+  // Diabetes + high BP combination
+  if (
+    patient.conditions &&
+    patient.conditions.includes("diabetes") &&
+    patient.vitals.bloodPressureSystolic > 130
+  ) {
+    risks.push({
+      type: "Diabetes + Hypertension",
+      severity: "High",
+      reason: "Combination increases cardiovascular risk"
+    });
+  }
+
   return risks;
 }
 
