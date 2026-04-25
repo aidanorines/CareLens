@@ -1,0 +1,269 @@
+"""Deterministic risk engine for CareLens (NEWS2).
+
+This module implements the National Early Warning Score 2 (NEWS2) using
+deterministic rules only (no LLM). It is intended to be used alongside the
+AI summary module for clinical decision support workflows.
+
+MVP assumptions:
+- Uses **SpO2 Scale 1** only (no COPD/hypercapnic RF Scale 2 support yet).
+- Expects a normalized patient dict (not raw FHIR bundle).
+- If required vitals are missing, returns an Insufficient Data result rather
+  than guessing.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict, Union
+
+
+RiskCategory = Literal["Low", "Medium", "High", "Insufficient Data"]
+Avpu = Literal["A", "V", "P", "U"]
+
+
+class News2Components(TypedDict, total=False):
+    resp_rate: int
+    spo2: int
+    on_oxygen: int
+    temp_c: int
+    systolic_bp: int
+    heart_rate: int
+    consciousness: int
+
+
+class News2Result(TypedDict):
+    score: Optional[int]
+    category: RiskCategory
+    components: News2Components
+    missing_fields: List[str]
+    spo2_scale: Literal["Scale1"]
+
+
+def _as_float(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_bool(value: Any) -> Optional[bool]:
+    if isinstance(value, bool):
+        return value
+    return None
+
+
+def _parse_systolic_bp(vitals: Dict[str, Any]) -> Optional[float]:
+    for key in ("systolic_bp", "sbp_mmHg", "bloodPressureSystolic", "systolicBP"):
+        if key in vitals:
+            return _as_float(vitals.get(key))
+
+    # Common string format: "148/92"
+    for key in ("bp_mmHg", "bloodPressure", "bp"):
+        bp = vitals.get(key)
+        if isinstance(bp, str) and "/" in bp:
+            sbp_str = bp.split("/", 1)[0].strip()
+            return _as_float(sbp_str)
+
+    return None
+
+
+def _parse_consciousness(vitals: Dict[str, Any]) -> Optional[Union[Avpu, Literal["CONFUSION"]]]:
+    # Prefer AVPU if present
+    for key in ("consciousness", "avpu"):
+        raw = vitals.get(key)
+        if isinstance(raw, str):
+            val = raw.strip().upper()
+            if val in ("A", "V", "P", "U"):
+                return val  # type: ignore[return-value]
+
+    # If we only know "new confusion", NEWS2 treats it as 3 points
+    for key in ("new_confusion", "newConfusion", "confusion"):
+        if vitals.get(key) is True:
+            return "CONFUSION"
+
+    return None
+
+
+def _score_resp_rate(rr: Optional[float]) -> Optional[int]:
+    if rr is None:
+        return None
+    if rr <= 8:
+        return 3
+    if 9 <= rr <= 11:
+        return 1
+    if 12 <= rr <= 20:
+        return 0
+    if 21 <= rr <= 24:
+        return 2
+    return 3  # >= 25
+
+
+def _score_spo2_scale1(spo2: Optional[float]) -> Optional[int]:
+    if spo2 is None:
+        return None
+    if spo2 <= 91:
+        return 3
+    if 92 <= spo2 <= 93:
+        return 2
+    if 94 <= spo2 <= 95:
+        return 1
+    return 0  # >= 96
+
+
+def _score_on_oxygen(on_oxygen: Optional[bool]) -> Optional[int]:
+    if on_oxygen is None:
+        return None
+    return 2 if on_oxygen else 0
+
+
+def _score_temp(temp_c: Optional[float]) -> Optional[int]:
+    if temp_c is None:
+        return None
+    if temp_c <= 35.0:
+        return 3
+    if 35.1 <= temp_c <= 36.0:
+        return 1
+    if 36.1 <= temp_c <= 38.0:
+        return 0
+    if 38.1 <= temp_c <= 39.0:
+        return 1
+    return 2  # >= 39.1
+
+
+def _score_systolic_bp(sbp: Optional[float]) -> Optional[int]:
+    if sbp is None:
+        return None
+    if sbp <= 90:
+        return 3
+    if 91 <= sbp <= 100:
+        return 2
+    if 101 <= sbp <= 110:
+        return 1
+    if 111 <= sbp <= 219:
+        return 0
+    return 3  # >= 220
+
+
+def _score_heart_rate(hr: Optional[float]) -> Optional[int]:
+    if hr is None:
+        return None
+    if hr <= 40:
+        return 3
+    if 41 <= hr <= 50:
+        return 1
+    if 51 <= hr <= 90:
+        return 0
+    if 91 <= hr <= 110:
+        return 1
+    if 111 <= hr <= 130:
+        return 2
+    return 3  # >= 131
+
+
+def _score_consciousness(consciousness: Optional[Union[Avpu, Literal["CONFUSION"]]]) -> Optional[int]:
+    if consciousness is None:
+        return None
+    if consciousness == "A":
+        return 0
+    if consciousness in ("V", "P", "U", "CONFUSION"):
+        return 3
+    return None
+
+
+def compute_news2_components(patient: Dict[str, Any]) -> Tuple[News2Components, List[str]]:
+    """Compute NEWS2 component scores and report missing fields.
+
+    Accepted normalized input (common aliases supported):
+    - resp_rate: `vitals.resp_rate`, `vitals.respRate`, `vitals.respiratoryRate`
+    - spo2: `vitals.spo2_pct`, `vitals.spo2`, `vitals.oxygenSaturation`
+    - systolic BP: `vitals.systolic_bp`, `vitals.sbp_mmHg`, `vitals.bp_mmHg` ("148/92"), ...
+    - heart rate: `vitals.hr_bpm`, `vitals.heartRate`, `vitals.pulse`
+    - temperature: `vitals.temp_C`, `vitals.tempC`, `vitals.temperatureC`
+    - on oxygen: `vitals.on_supplemental_o2`, `vitals.onOxygen`, ...
+    - consciousness: `vitals.consciousness` (AVPU) or `vitals.new_confusion` boolean
+    """
+    vitals = patient.get("vitals") if isinstance(patient.get("vitals"), dict) else patient
+
+    rr = _as_float(vitals.get("resp_rate") or vitals.get("respRate") or vitals.get("respiratoryRate"))
+    spo2 = _as_float(vitals.get("spo2_pct") or vitals.get("spo2") or vitals.get("oxygenSaturation"))
+    sbp = _parse_systolic_bp(vitals)
+    hr = _as_float(vitals.get("hr_bpm") or vitals.get("heartRate") or vitals.get("pulse"))
+    temp_c = _as_float(vitals.get("temp_C") or vitals.get("tempC") or vitals.get("temperatureC"))
+    on_oxygen = _as_bool(
+        vitals.get("on_supplemental_o2")
+        if "on_supplemental_o2" in vitals
+        else vitals.get("onOxygen") if "onOxygen" in vitals else vitals.get("supplementalOxygen")
+    )
+    consciousness = _parse_consciousness(vitals)
+
+    components: News2Components = {}
+
+    components["resp_rate"] = _score_resp_rate(rr)  # type: ignore[assignment]
+    components["spo2"] = _score_spo2_scale1(spo2)  # type: ignore[assignment]
+    components["on_oxygen"] = _score_on_oxygen(on_oxygen)  # type: ignore[assignment]
+    components["temp_c"] = _score_temp(temp_c)  # type: ignore[assignment]
+    components["systolic_bp"] = _score_systolic_bp(sbp)  # type: ignore[assignment]
+    components["heart_rate"] = _score_heart_rate(hr)  # type: ignore[assignment]
+    components["consciousness"] = _score_consciousness(consciousness)  # type: ignore[assignment]
+
+    missing = [k for k, v in components.items() if v is None]
+    return components, missing
+
+
+def compute_news2_score(patient: Dict[str, Any]) -> News2Result:
+    """Compute NEWS2 score + standard escalation category.
+
+    Escalation (standard NEWS2 guidance):
+    - High: score >= 7
+    - Medium: score 5–6 OR any single parameter scores 3
+    - Low: score 0–4 with no 3s
+    """
+    components, missing = compute_news2_components(patient)
+    if missing:
+        return {
+            "score": None,
+            "category": "Insufficient Data",
+            "components": components,
+            "missing_fields": missing,
+            "spo2_scale": "Scale1",
+        }
+
+    score = sum(int(v) for v in components.values() if v is not None)
+    has_three = any(v == 3 for v in components.values())
+    if score >= 7:
+        category: RiskCategory = "High"
+    elif score >= 5 or has_three:
+        category = "Medium"
+    else:
+        category = "Low"
+
+    return {
+        "score": score,
+        "category": category,
+        "components": components,
+        "missing_fields": [],
+        "spo2_scale": "Scale1",
+    }
+
+
+if __name__ == "__main__":
+    demo_patient: Dict[str, Any] = {
+        "vitals": {
+            "respRate": 18,
+            "spo2_pct": 96,
+            "bp_mmHg": "148/92",
+            "hr_bpm": 88,
+            "temp_C": 36.9,
+            "on_supplemental_o2": False,
+            "consciousness": "A",
+        }
+    }
+
+    result = compute_news2_score(demo_patient)
+    print("NEWS2 demo result:")
+    print(result)
+
