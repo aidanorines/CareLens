@@ -16,6 +16,13 @@ app.get("/", (req, res) => {
   });
 });
 
+app.get("/health", (req, res) => {
+  res.json({
+    status: "OK",
+    service: "CareLens Backend"
+  });
+});
+
 app.get("/patients", (req, res) => {
   res.json({
     message: "Patients route is working",
