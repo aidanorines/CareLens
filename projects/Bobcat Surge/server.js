@@ -21,6 +21,15 @@ app.get("/patients", (req, res) => {
   });
 });
 
+app.post("/patients/upload", (req, res) => {
+  const patientData = req.body;
+
+  res.status(201).json({
+    message: "Patient upload route is working",
+    receivedData: patientData
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
