@@ -14,6 +14,13 @@ app.get("/", (req, res) => {
   });
 });
 
+app.get("/patients", (req, res) => {
+  res.json({
+    message: "Patients route is working",
+    patients: []
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
