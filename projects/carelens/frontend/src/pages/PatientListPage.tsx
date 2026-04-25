@@ -1,46 +1,44 @@
-import { Activity, AlertTriangle, ShieldCheck, ShieldQuestion, Users } from "lucide-react";
-import PatientCard from "../components/PatientCard";
+import { useEffect, useState } from "react";
+import { ArrowRight, ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react";
+import { Link } from "react-router-dom";
+import { getAssessments, getPatients } from "../api/patients";
 import EmptyState from "../components/EmptyState";
-import { mockAssessments, mockPatients } from "../data/mockPatients";
-import type { RiskLevel } from "../types/patient";
+import LoadingState from "../components/LoadingState";
+import type { Assessment, Patient, RiskLevel } from "../types/patient";
 
-const summaryCards = [
-  {
-    label: "Total Patients",
-    value: mockPatients.length,
-    icon: Users,
-    className: "bg-white text-slate-800",
-    iconClassName: "bg-sky-50 text-sky-700",
-  },
-  {
-    label: "High Risk Patients",
-    value: countRiskLevel("High"),
-    icon: AlertTriangle,
-    className: "bg-white text-slate-900",
-    iconClassName: "bg-rose-50 text-rose-700",
-  },
-  {
-    label: "Moderate Risk Patients",
-    value: countRiskLevel("Moderate"),
-    icon: ShieldQuestion,
-    className: "bg-white text-slate-900",
-    iconClassName: "bg-amber-50 text-amber-700",
-  },
-  {
-    label: "Low Risk Patients",
-    value: countRiskLevel("Low"),
-    icon: ShieldCheck,
-    className: "bg-white text-slate-900",
-    iconClassName: "bg-emerald-50 text-emerald-700",
-  },
-];
+const riskStyles: Record<RiskLevel, string> = {
+  High: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
+  Moderate: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+  Low: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
+};
 
-function countRiskLevel(riskLevel: RiskLevel) {
-  return mockAssessments.filter((assessment) => assessment.riskLevel === riskLevel).length;
-}
+const riskIcons: Record<RiskLevel, typeof ShieldAlert> = {
+  High: ShieldAlert,
+  Moderate: ShieldQuestion,
+  Low: ShieldCheck,
+};
 
 export default function PatientListPage() {
-  if (mockPatients.length === 0) {
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadPatients() {
+      const [data, assessmentData] = await Promise.all([getPatients(), getAssessments()]);
+      setPatients(data);
+      setAssessments(assessmentData);
+      setLoading(false);
+    }
+
+    void loadPatients();
+  }, []);
+
+  if (loading) {
+    return <LoadingState label="Preparing patient summaries..." />;
+  }
+
+  if (patients.length === 0) {
     return (
       <EmptyState
         title="No patients available"
@@ -50,74 +48,64 @@ export default function PatientListPage() {
   }
 
   return (
-    <section className="space-y-8">
-      <div className="overflow-hidden rounded-lg border border-sky-100 bg-white shadow-panel">
-        <div className="border-b border-sky-100 bg-gradient-to-r from-sky-50 via-white to-teal-50 px-6 py-7 md:px-8">
-          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-brand-700">
-                <Activity className="h-4 w-4" />
-                CareLens Risk Overview
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-800 md:text-4xl">
-                Patient Risk Queue
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                Mock clinical profiles are organized by AI risk level so the demo can quickly
-                surface who needs attention first.
-              </p>
-            </div>
-            <div className="rounded-lg border border-teal-100 bg-white/80 px-4 py-3 text-sm font-medium text-slate-600 shadow-sm">
-              Demo dataset • {mockAssessments.length} assessments
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-4 bg-slate-50/80 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          {summaryCards.map((card) => {
-            const Icon = card.icon;
-
-            return (
-              <article
-                key={card.label}
-                className={`rounded-lg border border-slate-200 p-4 shadow-sm ${card.className}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm opacity-75">{card.label}</p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight">{card.value}</p>
-                  </div>
-                  <div className={`rounded-lg p-3 ${card.iconClassName}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+    <section className="space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-panel">
+        <p className="text-sm font-medium uppercase tracking-[0.2em] text-brand-700">
+          Demo Overview
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+          Patient Risk Queue
+        </h1>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+          Frontend scaffold for the CareLens hackathon demo. This page is wired with mock
+          patient data so the experience works without the backend during UI development.
+        </p>
       </div>
 
-      <div>
-        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight text-slate-800">
-              Patient Cards
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Review the latest risk level and open the patient dashboard for details.
-            </p>
-          </div>
-        </div>
+      <div className="grid gap-4">
+        {patients.map((patient) => {
+          const assessment = assessments.find((item) => item.patientId === patient.id);
+          const riskLevel = assessment?.riskLevel ?? "Low";
+          const RiskIcon = riskIcons[riskLevel];
 
-        <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {mockPatients.map((patient) => (
-            <PatientCard
+          return (
+            <Link
               key={patient.id}
-              patient={patient}
-              assessment={mockAssessments.find((assessment) => assessment.patientId === patient.id)}
-            />
-          ))}
-        </div>
+              to={`/patients/${patient.id}`}
+              className="group rounded-3xl border border-slate-200 bg-white p-5 shadow-panel transition hover:-translate-y-0.5 hover:border-brand-200"
+            >
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-semibold text-slate-900">{patient.name}</h2>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${riskStyles[riskLevel]}`}
+                    >
+                      <RiskIcon className="h-3.5 w-3.5" />
+                      {riskLevel} Risk
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Age {patient.age} • {patient.sex} • {patient.conditions.join(", ")}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 text-sm text-slate-500">
+                  <span>
+                    Assessed{" "}
+                    {assessment
+                      ? new Date(assessment.createdAt).toLocaleDateString()
+                      : "pending"}
+                  </span>
+                  <span className="flex items-center gap-1 font-medium text-brand-700">
+                    View dashboard
+                    <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                  </span>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </section>
   );
