@@ -39,7 +39,28 @@ function analyze(patient) {
     });
   }
 
-  return risks;
+  let score = 0;
+
+  risks.forEach((risk) => {
+    if (risk.severity === "High") score += 30;
+    if (risk.severity === "Medium") score += 15;
+    if (risk.severity === "Low") score += 5;
+  });
+
+  let level = "Low";
+
+  if (score >= 60) {
+    level = "High";
+  } else if (score >= 30) {
+    level = "Medium";
+  }
+
+  return {
+    score: score,
+    level: level,
+    flags: risks
+  };
+
 }
 
 module.exports = { analyze };

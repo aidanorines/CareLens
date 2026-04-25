@@ -32,14 +32,16 @@ app.post("/patients/analyze", (req, res) => {
     });
   }
 
-  const risks = riskEngine.analyze(patientData);
+  const analysis = riskEngine.analyze(patientData);
 
-  const summary = summaryGenerator.generate(patientData, risks);
+  const summary = summaryGenerator.generate(patientData, analysis.flags);
 
   res.status(201).json({
     message: "Patient analyzed successfully",
     patient: patientData,
-    risks: risks,
+    riskScore: analysis.score,
+    riskLevel: analysis.level,
+    riskFlags: analysis.flags,
     summary: summary
   });
 });
