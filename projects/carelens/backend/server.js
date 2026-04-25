@@ -33,9 +33,19 @@ app.get("/patients", (req, res) => {
 app.post("/patients/analyze", (req, res) => {
   const patientData = req.body;
 
-  if (!patientData.age || !patientData.vitals) {
+  if (
+  !patientData.age ||
+  !patientData.vitals ||
+  !patientData.vitals.bloodPressureSystolic ||
+  !patientData.vitals.bmi
+  ) {
     return res.status(400).json({
-      error: "Missing required patient data"
+      error: "Missing required patient data",
+      requiredFields: [
+        "age",
+        "vitals.bloodPressureSystolic",
+        "vitals.bmi"
+      ]
     });
   }
 
