@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const riskEngine = require("./riskEngine");
+const summaryGenerator = require("./summaryGenerator");
 
 const app = express();
 const PORT = 3000;
