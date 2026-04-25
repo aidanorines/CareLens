@@ -7,13 +7,24 @@ AI summary module for clinical decision support workflows.
 MVP assumptions:
 - Uses **SpO2 Scale 1** only (no COPD/hypercapnic RF Scale 2 support yet).
 - Expects a normalized patient dict (not raw FHIR bundle).
+<<<<<<< HEAD
 - If required vitals are missing, returns an Insufficient Data result rather
   than guessing.
+=======
+- **Demo defaults (Option B)**: if respiratory rate, supplemental oxygen, or
+  consciousness are missing, the engine applies conservative *synthetic demo*
+  defaults so the hackathon UI can always render a NEWS2 score. These defaults
+  are **not** a substitute for real clinical documentation and must be
+  disclosed in product docs / responsible-ai notes.
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
 """
 
 from __future__ import annotations
 
+<<<<<<< HEAD
 from dataclasses import dataclass
+=======
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
 from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict, Union
 
 
@@ -37,6 +48,11 @@ class News2Result(TypedDict):
     components: News2Components
     missing_fields: List[str]
     spo2_scale: Literal["Scale1"]
+<<<<<<< HEAD
+=======
+    defaults_used: Dict[str, Any]
+    inputs_used: Dict[str, Any]
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -88,6 +104,33 @@ def _parse_consciousness(vitals: Dict[str, Any]) -> Optional[Union[Avpu, Literal
     return None
 
 
+<<<<<<< HEAD
+=======
+def _infer_temp_c(vitals: Dict[str, Any]) -> Tuple[Optional[float], Optional[str]]:
+    """Infer temperature in Celsius from common frontend fields.
+
+    CareLens mock data uses `temperature` in Fahrenheit-ish ranges (e.g. 98–99).
+    If a Celsius field is present (`temp_C` / `tempC` / `temperatureC`), it wins.
+    """
+    for key in ("temp_C", "tempC", "temperatureC"):
+        if key in vitals:
+            val = _as_float(vitals.get(key))
+            return val, f"{key} (assumed C)"
+
+    if "temperature" in vitals:
+        f_val = _as_float(vitals.get("temperature"))
+        if f_val is None:
+            return None, None
+        # Heuristic: values > 45 are almost certainly Fahrenheit for human vitals
+        if f_val > 45:
+            c_val = (f_val - 32.0) * (5.0 / 9.0)
+            return c_val, "temperature (F) converted to C"
+        return f_val, "temperature (assumed C)"
+
+    return None, None
+
+
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
 def _score_resp_rate(rr: Optional[float]) -> Optional[int]:
     if rr is None:
         return None
@@ -174,14 +217,20 @@ def _score_consciousness(consciousness: Optional[Union[Avpu, Literal["CONFUSION"
     return None
 
 
+<<<<<<< HEAD
 def compute_news2_components(patient: Dict[str, Any]) -> Tuple[News2Components, List[str]]:
     """Compute NEWS2 component scores and report missing fields.
+=======
+def compute_news2_components(patient: Dict[str, Any]) -> Tuple[News2Components, Dict[str, Any], Dict[str, Any]]:
+    """Compute NEWS2 component scores.
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
 
     Accepted normalized input (common aliases supported):
     - resp_rate: `vitals.resp_rate`, `vitals.respRate`, `vitals.respiratoryRate`
     - spo2: `vitals.spo2_pct`, `vitals.spo2`, `vitals.oxygenSaturation`
     - systolic BP: `vitals.systolic_bp`, `vitals.sbp_mmHg`, `vitals.bp_mmHg` ("148/92"), ...
     - heart rate: `vitals.hr_bpm`, `vitals.heartRate`, `vitals.pulse`
+<<<<<<< HEAD
     - temperature: `vitals.temp_C`, `vitals.tempC`, `vitals.temperatureC`
     - on oxygen: `vitals.on_supplemental_o2`, `vitals.onOxygen`, ...
     - consciousness: `vitals.consciousness` (AVPU) or `vitals.new_confusion` boolean
@@ -193,12 +242,61 @@ def compute_news2_components(patient: Dict[str, Any]) -> Tuple[News2Components, 
     sbp = _parse_systolic_bp(vitals)
     hr = _as_float(vitals.get("hr_bpm") or vitals.get("heartRate") or vitals.get("pulse"))
     temp_c = _as_float(vitals.get("temp_C") or vitals.get("tempC") or vitals.get("temperatureC"))
+=======
+    - temperature: `vitals.temp_C`, `vitals.tempC`, `vitals.temperatureC`, `vitals.temperature` (°F heuristic)
+    - on oxygen: `vitals.on_supplemental_o2`, `vitals.onOxygen`, ...
+    - consciousness: `vitals.consciousness` (AVPU) or `vitals.new_confusion` boolean
+
+    Demo defaults (Option B):
+    - Missing RR -> assume 16 breaths/min (0 points in normal band)
+    - Missing supplemental oxygen -> assume False (0 points)
+    - Missing consciousness -> assume Alert ("A") (0 points)
+    """
+    vitals = patient.get("vitals") if isinstance(patient.get("vitals"), dict) else patient
+
+    defaults_used: Dict[str, Any] = {}
+    inputs_used: Dict[str, Any] = {}
+
+    rr = _as_float(vitals.get("resp_rate") or vitals.get("respRate") or vitals.get("respiratoryRate"))
+    if rr is None:
+        rr = 16.0
+        defaults_used["resp_rate"] = {"value": rr, "reason": "missing; demo default RR=16"}
+    inputs_used["resp_rate"] = rr
+
+    spo2 = _as_float(vitals.get("spo2_pct") or vitals.get("spo2") or vitals.get("oxygenSaturation"))
+    inputs_used["spo2"] = spo2
+
+    sbp = _parse_systolic_bp(vitals)
+    inputs_used["systolic_bp"] = sbp
+
+    hr = _as_float(vitals.get("hr_bpm") or vitals.get("heartRate") or vitals.get("pulse"))
+    inputs_used["heart_rate"] = hr
+
+    temp_c, temp_note = _infer_temp_c(vitals)
+    inputs_used["temp_c"] = temp_c
+    if temp_note:
+        inputs_used["temp_source"] = temp_note
+
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
     on_oxygen = _as_bool(
         vitals.get("on_supplemental_o2")
         if "on_supplemental_o2" in vitals
         else vitals.get("onOxygen") if "onOxygen" in vitals else vitals.get("supplementalOxygen")
     )
+<<<<<<< HEAD
     consciousness = _parse_consciousness(vitals)
+=======
+    if on_oxygen is None:
+        on_oxygen = False
+        defaults_used["on_oxygen"] = {"value": on_oxygen, "reason": "missing; demo default not on oxygen"}
+    inputs_used["on_oxygen"] = on_oxygen
+
+    consciousness = _parse_consciousness(vitals)
+    if consciousness is None:
+        consciousness = "A"
+        defaults_used["consciousness"] = {"value": consciousness, "reason": "missing; demo default Alert (A)"}
+    inputs_used["consciousness"] = consciousness
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
 
     components: News2Components = {}
 
@@ -211,7 +309,11 @@ def compute_news2_components(patient: Dict[str, Any]) -> Tuple[News2Components, 
     components["consciousness"] = _score_consciousness(consciousness)  # type: ignore[assignment]
 
     missing = [k for k, v in components.items() if v is None]
+<<<<<<< HEAD
     return components, missing
+=======
+    return components, defaults_used, inputs_used
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
 
 
 def compute_news2_score(patient: Dict[str, Any]) -> News2Result:
@@ -222,7 +324,12 @@ def compute_news2_score(patient: Dict[str, Any]) -> News2Result:
     - Medium: score 5–6 OR any single parameter scores 3
     - Low: score 0–4 with no 3s
     """
+<<<<<<< HEAD
     components, missing = compute_news2_components(patient)
+=======
+    components, defaults_used, inputs_used = compute_news2_components(patient)
+    missing = [k for k, v in components.items() if v is None]
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
     if missing:
         return {
             "score": None,
@@ -230,6 +337,11 @@ def compute_news2_score(patient: Dict[str, Any]) -> News2Result:
             "components": components,
             "missing_fields": missing,
             "spo2_scale": "Scale1",
+<<<<<<< HEAD
+=======
+            "defaults_used": defaults_used,
+            "inputs_used": inputs_used,
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
         }
 
     score = sum(int(v) for v in components.values() if v is not None)
@@ -247,10 +359,16 @@ def compute_news2_score(patient: Dict[str, Any]) -> News2Result:
         "components": components,
         "missing_fields": [],
         "spo2_scale": "Scale1",
+<<<<<<< HEAD
+=======
+        "defaults_used": defaults_used,
+        "inputs_used": inputs_used,
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
     }
 
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     demo_patient: Dict[str, Any] = {
         "vitals": {
             "respRate": 18,
@@ -266,4 +384,9 @@ if __name__ == "__main__":
     result = compute_news2_score(demo_patient)
     print("NEWS2 demo result:")
     print(result)
+=======
+    # Minimal smoke test; full cases live in `tests/test_risk_engine.py`.
+    demo_patient: Dict[str, Any] = {"vitals": {"bloodPressure": "120/80", "heartRate": 75, "temperature": 98.6, "oxygenSaturation": 98}}
+    print(compute_news2_score(demo_patient))
+>>>>>>> 63d36a9 (Add deterministic NEWS2 risk engine + tests)
 
