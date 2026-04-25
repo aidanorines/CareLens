@@ -24,6 +24,13 @@ app.get("/patients", (req, res) => {
 
 app.post("/patients/upload", (req, res) => {
   const patientData = req.body;
+
+  if (!patientData.age || !patientData.vitals) {
+    return res.status(400).json({
+      error: "Missing required patient data"
+    });
+  }
+
   const risks = riskEngine.analyze(patientData);
 
   res.status(201).json({
