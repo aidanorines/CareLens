@@ -9,31 +9,26 @@ const vitalsMeta = [
   {
     label: "Blood Pressure",
     key: "bloodPressure",
-    unit: "mmHg",
     icon: Activity,
   },
   {
     label: "Heart Rate",
     key: "heartRate",
-    unit: "bpm",
     icon: HeartPulse,
   },
   {
     label: "BMI",
     key: "bmi",
-    unit: "",
     icon: Scale,
   },
   {
     label: "Temperature",
     key: "temperature",
-    unit: "F",
     icon: Thermometer,
   },
   {
     label: "Oxygen Saturation",
     key: "oxygenSaturation",
-    unit: "%",
     icon: Wind,
   },
 ] as const;
@@ -49,20 +44,17 @@ export default function VitalsCard({ vitals }: VitalsCardProps) {
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {vitalsMeta.map(({ label, key, unit, icon: Icon }) => {
-          const value = vitals[key];
+        {vitalsMeta.map(({ label, key, icon: Icon }) => {
+          const formattedValue = formatVitalValue(key, vitals?.[key]);
 
           return (
-            <div key={key} className="rounded-lg border border-slate-100 bg-slate-50/80 p-4">
+            <div key={key} className="min-w-0 rounded-lg border border-slate-100 bg-slate-50/80 p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
-                <Icon className="h-4 w-4 text-brand-700" />
-                {label}
+                <Icon className="h-4 w-4 shrink-0 text-brand-700" />
+                <span className="truncate">{label}</span>
               </div>
-              <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
-                {value ?? "N/A"}
-                {value !== undefined && unit ? (
-                  <span className="ml-1 text-sm font-medium text-slate-500">{unit}</span>
-                ) : null}
+              <p className="mt-3 break-words text-2xl font-semibold tracking-tight text-slate-900">
+                {formattedValue}
               </p>
             </div>
           );
@@ -70,4 +62,20 @@ export default function VitalsCard({ vitals }: VitalsCardProps) {
       </div>
     </article>
   );
+}
+
+function formatVitalValue(key: keyof Patient["vitals"], value: Patient["vitals"][keyof Patient["vitals"]]) {
+  if (value === undefined || value === null || value === "") return "N/A";
+
+  if (key === "bloodPressure") return String(value);
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return "N/A";
+
+  if (key === "heartRate") return `${Math.round(numericValue)} bpm`;
+  if (key === "bmi") return numericValue.toFixed(1);
+  if (key === "temperature") return `${numericValue.toFixed(1)} °C`;
+  if (key === "oxygenSaturation") return `${Math.round(numericValue)}%`;
+
+  return String(value);
 }

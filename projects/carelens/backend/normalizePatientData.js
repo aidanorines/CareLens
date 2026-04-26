@@ -102,8 +102,8 @@ function normalizeSimplifiedPatient(data) {
   return {
     id: stringOrUndefined(data?.id) || stringOrUndefined(data?.fhir_id) || generateId(),
     name:
-      stringOrUndefined(data?.name) ||
-      [data?.first_name, data?.last_name].filter(Boolean).join(" ") ||
+      cleanFullName(stringOrUndefined(data?.name)) ||
+      cleanFullName([data?.first_name, data?.last_name].filter(Boolean).join(" ")) ||
       "Unnamed Patient",
     age: numericOrFallback(data?.age, calculateAge(birthDate)),
     sex: formatSex(data?.sex || data?.gender),
@@ -137,12 +137,12 @@ function isCcdaDocument(data) {
 function ccdaPatientName(nameNode) {
   const name = firstArrayItem(asArray(nameNode)) || {};
   const text = stringOrUndefined(name?.["#text"]);
-  if (text) return text;
+  if (text) return cleanFullName(text);
 
-  return [
-    nodeText(findFirstByLocalName(name, "given")),
-    nodeText(findFirstByLocalName(name, "family")),
-  ].filter(Boolean).join(" ");
+  const givenNames = findAllByLocalName(name, "given").map(nodeText).filter(Boolean);
+  const familyName = nodeText(findFirstByLocalName(name, "family"));
+
+  return cleanFullName([...givenNames, familyName].filter(Boolean).join(" "));
 }
 
 function formatCcdaSex(genderNode) {
@@ -217,7 +217,7 @@ function extractCcdaVitals(sections) {
     }
   });
 
-  return vitals;
+  return cleanVitals(vitals);
 }
 
 function findCcdaVitalValue(observations, labelParts, targetCodes) {
@@ -348,12 +348,14 @@ function patientName(patient) {
   const primaryName = names[0];
 
   if (!primaryName) return "";
-  if (primaryName.text) return primaryName.text;
+  if (primaryName.text) return cleanFullName(primaryName.text);
 
-  return [primaryName.given, primaryName.family]
-    .flat()
-    .filter(Boolean)
-    .join(" ");
+  return cleanFullName(
+    [primaryName.given, primaryName.family]
+      .flat()
+      .filter(Boolean)
+      .join(" "),
+  );
 }
 
 function identifierValue(identifiers) {
@@ -390,7 +392,7 @@ function extractVitals(observations) {
     }
   });
 
-  return vitals;
+  return cleanVitals(vitals);
 }
 
 function extractBloodPressure(observation) {
@@ -424,13 +426,13 @@ function extractBloodPressure(observation) {
 function normalizeVitals(vitals) {
   const source = vitals && typeof vitals === "object" ? vitals : {};
 
-  return {
+  return cleanVitals({
     bloodPressure: stringOrUndefined(source.bloodPressure),
     heartRate: numericOrUndefined(source.heartRate),
     bmi: numericOrUndefined(source.bmi),
     temperature: numericOrUndefined(source.temperature),
     oxygenSaturation: numericOrUndefined(source.oxygenSaturation),
-  };
+  });
 }
 
 function encounterText(encounter) {
@@ -484,6 +486,48 @@ function matchesCode(label, codes, labelParts, targetCodes) {
     labelParts.some((part) => label.includes(part)) ||
     targetCodes.some((code) => codes.includes(code.toLowerCase()))
   );
+}
+
+function cleanFullName(value) {
+  const text = stringOrUndefined(value);
+  if (!text) return "";
+
+  return text
+    .split(/\s+/)
+    .map(cleanNamePart)
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
+function cleanNamePart(value) {
+  return String(value || "").trim().replace(/\d+$/g, "");
+}
+
+function cleanVitals(vitals) {
+  const cleaned = {};
+
+  const bloodPressure = stringOrUndefined(vitals?.bloodPressure);
+  if (bloodPressure) cleaned.bloodPressure = bloodPressure;
+
+  const heartRate = numericOrUndefined(vitals?.heartRate);
+  if (heartRate !== undefined) cleaned.heartRate = Math.round(heartRate);
+
+  const bmi = numericOrUndefined(vitals?.bmi);
+  if (bmi !== undefined) cleaned.bmi = roundTo(bmi, 1);
+
+  const temperature = numericOrUndefined(vitals?.temperature);
+  if (temperature !== undefined) cleaned.temperature = roundTo(temperature, 1);
+
+  const oxygenSaturation = numericOrUndefined(vitals?.oxygenSaturation);
+  if (oxygenSaturation !== undefined) cleaned.oxygenSaturation = Math.round(oxygenSaturation);
+
+  return cleaned;
+}
+
+function roundTo(value, decimals) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }
 
 function calculateAge(birthDate) {

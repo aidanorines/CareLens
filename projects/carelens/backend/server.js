@@ -163,7 +163,7 @@ app.listen(PORT, () => {
 function buildAssessment(patient, id) {
   const analysisInput = toRiskEnginePatient(patient);
   const analysis = riskEngine.analyze(analysisInput);
-  const flags = analysis.flags.map((flag) => flag.reason);
+  const flags = analysis.flags.map((flag) => typeof flag === "string" ? flag : flag.reason || flag.type).filter(Boolean);
 
   return {
     id,
@@ -212,9 +212,8 @@ function toRiskEnginePatient(patient) {
   return {
     ...patient,
     vitals: {
-      ...patient.vitals,
-      bloodPressureSystolic: Number.isNaN(systolic) ? 0 : systolic,
-      bmi: Number(patient.vitals?.bmi) || 0,
+      ...(patient.vitals || {}),
+      bloodPressureSystolic: Number.isNaN(systolic) ? undefined : systolic,
     },
   };
 }
