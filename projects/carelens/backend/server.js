@@ -155,12 +155,18 @@ app.get("/patients/:id/assessment", (req, res) => {
 app.post("/patients/analyze", (req, res) => {
   const patientData = req.body;
 
-  if (!patientData || !patientData.age || !patientData.vitals) {
-    return res.status(400).json({
-      error: "Missing required patient data",
-      requiredFields: ["age", "vitals"],
-    });
-  }
+ if (
+  !patientData ||
+  patientData.age == null ||
+  !patientData.vitals ||
+  patientData.vitals.bloodPressureSystolic == null ||
+  patientData.vitals.bmi == null
+) {
+  return res.status(400).json({
+    error: "Missing required patient data",
+    requiredFields: ["age", "vitals.bloodPressureSystolic", "vitals.bmi"],
+  });
+}
 
   const analysis = riskEngine.analyze(patientData);
   const summary = summaryGenerator.generate(patientData, analysis.flags);
