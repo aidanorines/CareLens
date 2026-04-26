@@ -57,5 +57,6 @@ Thumbs.db
 # Local certificates and temporary files
 *.local
 *.pem
+*.zip
 tmp/
 temp/
