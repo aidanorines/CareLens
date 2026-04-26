@@ -22,6 +22,7 @@ out/
 .env.*
 !.env.example
 !.env.sample
+.venv
 
 # Logs
 logs/
