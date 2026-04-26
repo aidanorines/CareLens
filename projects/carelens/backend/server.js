@@ -134,7 +134,7 @@ app.post("/api/patients/upload", upload.single("file"), (req, res) => {
     return res.status(400).json({ error: error.message });
   }
 
-  const patient = normalizePatientData(rawData);
+  const patient = ensurePatientId(normalizePatientData(rawData));
   patients.push(patient);
 
   const assessment = buildAssessment(patient, `a-${Date.now()}`);
@@ -197,6 +197,13 @@ function parseUploadedPatientFile(file) {
   }
 
   throw new Error("Only JSON or XML patient records are supported.");
+}
+
+function ensurePatientId(patient) {
+  return {
+    ...patient,
+    id: patient.id || `p-${Date.now()}`,
+  };
 }
 
 function toRiskEnginePatient(patient) {

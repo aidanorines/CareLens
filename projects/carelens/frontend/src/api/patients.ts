@@ -62,6 +62,10 @@ export async function uploadPatient(patient: PatientUpload | File): Promise<Uplo
     const response = await api.post<UploadPatientResponse>("/patients/upload", body);
     return response.data;
   } catch {
+    if (patient instanceof File) {
+      throw new Error("Patient file upload failed.");
+    }
+
     const fallbackPatient = normalizePatientUpload(patient);
 
     return {

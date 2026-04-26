@@ -28,19 +28,17 @@ function normalizeFHIR(rawData) {
 
 function normalizeCCDA(rawData) {
   const data = parseInput(rawData);
-  const document = data?.ClinicalDocument || data?.clinicaldocument || data || {};
-  const patientRole = firstArrayItem(
-    asArray(document?.recordTarget).map((target) => target?.patientRole),
-  ) || {};
-  const patient = patientRole?.patient || {};
-  const birthDate = parseCcdaDate(attributeValue(patient?.birthTime));
-  const sections = findAllByKey(document, "section");
+  const document = findFirstByLocalName(data, "ClinicalDocument") || data || {};
+  const patientRole = findFirstByLocalName(document, "patientRole") || {};
+  const patient = findFirstByLocalName(patientRole, "patient") || {};
+  const birthDate = parseCCDADate(attributeValue(findFirstByLocalName(patient, "birthTime")));
+  const sections = findAllByLocalName(document, "section");
 
   return {
-    id: attributeValue(patientRole?.id) || generateId(),
-    name: ccdaPatientName(patient?.name) || "Unnamed Patient",
+    id: ccdaId(patientRole) || generateId(),
+    name: ccdaPatientName(findFirstByLocalName(patient, "name")) || "Unnamed Patient",
     age: calculateAge(birthDate),
-    sex: formatCcdaSex(patient?.administrativeGenderCode),
+    sex: formatCcdaSex(findFirstByLocalName(patient, "administrativeGenderCode")),
     conditions: uniqueStrings(extractCcdaSectionText(sections, ["problem", "condition"])),
     medications: uniqueStrings(extractCcdaMedications(sections)),
     vitals: extractCcdaVitals(sections),
@@ -133,7 +131,7 @@ function isFhirData(data) {
 }
 
 function isCcdaDocument(data) {
-  return Boolean(data?.ClinicalDocument || data?.clinicaldocument);
+  return Boolean(findFirstByLocalName(data, "ClinicalDocument"));
 }
 
 function ccdaPatientName(nameNode) {
@@ -141,7 +139,10 @@ function ccdaPatientName(nameNode) {
   const text = stringOrUndefined(name?.["#text"]);
   if (text) return text;
 
-  return [nodeText(name?.given), nodeText(name?.family)].filter(Boolean).join(" ");
+  return [
+    nodeText(findFirstByLocalName(name, "given")),
+    nodeText(findFirstByLocalName(name, "family")),
+  ].filter(Boolean).join(" ");
 }
 
 function formatCcdaSex(genderNode) {
@@ -163,8 +164,10 @@ function extractCcdaMedications(sections) {
   return sections
     .filter((section) => sectionMatches(section, ["medication"]))
     .flatMap((section) => {
-      const medicationMaterials = findAllByKey(section, "manufacturedMaterial");
-      const medicationDisplays = medicationMaterials.map((material) => displayText(material?.code));
+      const medicationMaterials = findAllByLocalName(section, "manufacturedMaterial");
+      const medicationDisplays = medicationMaterials.map((material) =>
+        displayText(findFirstByLocalName(material, "code")),
+      );
       return medicationDisplays.length > 0 ? medicationDisplays : findAllDisplayText(section);
     });
 }
@@ -173,9 +176,10 @@ function extractCcdaVitals(sections) {
   const vitals = {};
   const vitalSections = sections.filter((section) => sectionMatches(section, ["vital"]));
 
-  vitalSections.flatMap((section) => findAllByKey(section, "observation")).forEach((observation) => {
-    const label = displayText(observation?.code).toLowerCase();
-    const value = numericOrUndefined(attributeValue(observation?.value) || observation?.value);
+  vitalSections.flatMap((section) => findAllByLocalName(section, "observation")).forEach((observation) => {
+    const label = displayText(findFirstByLocalName(observation, "code")).toLowerCase();
+    const valueNode = findFirstByLocalName(observation, "value");
+    const value = numericOrUndefined(attributeValue(valueNode) || valueNode);
 
     if (value === undefined) return;
 
@@ -200,21 +204,22 @@ function extractCcdaVitals(sections) {
 
 function findSiblingVitalValue(sections, labelPart) {
   const observation = sections
-    .flatMap((section) => findAllByKey(section, "observation"))
-    .find((item) => displayText(item?.code).toLowerCase().includes(labelPart));
+    .flatMap((section) => findAllByLocalName(section, "observation"))
+    .find((item) => displayText(findFirstByLocalName(item, "code")).toLowerCase().includes(labelPart));
 
-  return numericOrUndefined(attributeValue(observation?.value) || observation?.value);
+  const valueNode = findFirstByLocalName(observation, "value");
+  return numericOrUndefined(attributeValue(valueNode) || valueNode);
 }
 
 function sectionMatches(section, titleParts) {
-  const title = nodeText(section?.title).toLowerCase();
-  const code = displayText(section?.code).toLowerCase();
+  const title = nodeText(findFirstByLocalName(section, "title")).toLowerCase();
+  const code = displayText(findFirstByLocalName(section, "code")).toLowerCase();
   return titleParts.some((part) => title.includes(part) || code.includes(part));
 }
 
 function findAllDisplayText(value) {
-  return findAllByKey(value, "code")
-    .concat(findAllByKey(value, "value"))
+  return findAllByLocalName(value, "code")
+    .concat(findAllByLocalName(value, "value"))
     .map((node) => displayText(node))
     .filter(Boolean);
 }
@@ -384,15 +389,20 @@ function formatSex(value) {
   return sex.charAt(0).toUpperCase() + sex.slice(1).toLowerCase();
 }
 
-function parseCcdaDate(value) {
+function parseCCDADate(value) {
   const text = stringOrUndefined(value);
   if (!text) return undefined;
 
-  const match = text.match(/^(\d{4})(\d{2})?(\d{2})?/);
+  const match = text.match(/^(\d{4})(\d{2})(\d{2})/);
   if (!match) return text;
 
-  const [, year, month = "01", day = "01"] = match;
+  const [, year, month, day] = match;
   return `${year}-${month}-${day}`;
+}
+
+function ccdaId(patientRole) {
+  const idNode = findFirstByLocalName(patientRole, "id");
+  return attributeValue(idNode);
 }
 
 function attributeValue(node) {
@@ -458,6 +468,30 @@ function findAllByKey(value, key) {
   return matches;
 }
 
+function findFirstByLocalName(value, localName) {
+  return findAllByLocalName(value, localName)[0];
+}
+
+function findAllByLocalName(value, localName) {
+  const matches = [];
+
+  walk(value, (node) => {
+    if (!node || typeof node !== "object") return;
+
+    Object.entries(node).forEach(([key, child]) => {
+      if (keyLocalName(key).toLowerCase() === localName.toLowerCase()) {
+        matches.push(...asArray(child));
+      }
+    });
+  });
+
+  return matches;
+}
+
+function keyLocalName(key) {
+  return String(key).split(":").pop();
+}
+
 function walk(value, visitor) {
   if (Array.isArray(value)) {
     value.forEach((item) => walk(item, visitor));
@@ -471,7 +505,7 @@ function walk(value, visitor) {
 }
 
 function generateId() {
-  return `p-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `p-${Date.now()}`;
 }
 
 module.exports = { normalizePatientData };
