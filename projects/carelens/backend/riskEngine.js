@@ -1,11 +1,36 @@
+function parseSystolic(vitals) {
+  if (!vitals) return null;
+
+  if (typeof vitals.bloodPressureSystolic === "number") {
+    return Number.isFinite(vitals.bloodPressureSystolic) ? vitals.bloodPressureSystolic : null;
+  }
+
+  if (typeof vitals.bloodPressure === "string") {
+    const [systolic] = vitals.bloodPressure.split("/");
+    const value = Number.parseInt((systolic ?? "").trim(), 10);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  return null;
+}
+
+function hasDiabetes(conditions) {
+  if (!Array.isArray(conditions)) return false;
+  return conditions.some(
+    (c) => typeof c === "string" && c.toLowerCase().includes("diabetes")
+  );
+}
+
 function analyze(patient) {
   const risks = [];
+  const vitals = patient?.vitals ?? {};
+  const systolic = parseSystolic(vitals);
 
-  if (patient.vitals.bloodPressureSystolic > 130) {
+  if (systolic != null && systolic > 130) {
     risks.push({
       type: "High Blood Pressure",
       severity: "High",
-      reason: "Systolic BP is above 130"
+      reason: `Systolic BP ${systolic} is above 130`
     });
   }
 
@@ -18,7 +43,7 @@ function analyze(patient) {
   }
 
   // BMI check
-  if (patient.vitals.bmi > 30) {
+  if (typeof vitals.bmi === "number" && vitals.bmi > 30) {
     risks.push({
       type: "High BMI",
       severity: "Medium",
@@ -28,9 +53,9 @@ function analyze(patient) {
 
   // Diabetes + high BP combination
   if (
-    patient.conditions &&
-    patient.conditions.includes("diabetes") &&
-    patient.vitals.bloodPressureSystolic > 130
+    hasDiabetes(patient.conditions) &&
+    systolic != null &&
+    systolic > 130
   ) {
     risks.push({
       type: "Diabetes + Hypertension",
@@ -63,4 +88,4 @@ function analyze(patient) {
 
 }
 
-module.exports = { analyze };
+module.exports = { analyze, parseSystolic };
