@@ -28,8 +28,8 @@ function analyze(patient) {
 
   // Diabetes + high BP combination
   if (
-    patient.conditions &&
-    patient.conditions.includes("diabetes") &&
+    Array.isArray(patient.conditions) &&
+    patient.conditions.some((condition) => String(condition).toLowerCase().includes("diabetes")) &&
     patient.vitals.bloodPressureSystolic > 130
   ) {
     risks.push({
