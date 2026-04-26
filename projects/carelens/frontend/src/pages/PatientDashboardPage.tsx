@@ -1,15 +1,12 @@
-import { useEffect, useState } from "react";
 import {
   ArrowLeft,
-  CheckCircle2,
-  Loader2,
   ShieldAlert,
   ShieldCheck,
   ShieldQuestion,
-  Sparkles,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { analyzePatient, getAssessmentByPatientId, getPatientById } from "../api/patients";
+import { getAssessmentByPatientId, getPatientById } from "../api/patients";
 import AssessmentHistory from "../components/dashboard/AssessmentHistory";
 import ConditionsCard from "../components/dashboard/ConditionsCard";
 import MedicationsCard from "../components/dashboard/MedicationsCard";
@@ -38,8 +35,6 @@ export default function PatientDashboardPage() {
   const [assessment, setAssessment] = useState<Assessment | undefined>();
   const [assessmentHistory, setAssessmentHistory] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisMessage, setAnalysisMessage] = useState("");
 
   useEffect(() => {
     async function loadPatient() {
@@ -55,29 +50,6 @@ export default function PatientDashboardPage() {
 
     void loadPatient();
   }, [id]);
-
-  async function handleAnalyzePatient() {
-    setIsAnalyzing(true);
-    setAnalysisMessage("");
-
-    try {
-      const result = await analyzePatient(id);
-      if (result) {
-        setAssessment(result);
-        setAssessmentHistory((current) => [
-          result,
-          ...current.filter((item) => item.id !== result.id),
-        ]);
-        setAnalysisMessage("Analysis completed successfully");
-      } else {
-        setAnalysisMessage("No analysis result returned.");
-      }
-    } catch {
-      setAnalysisMessage("Analysis failed. Check the backend and try again.");
-    } finally {
-      setIsAnalyzing(false);
-    }
-  }
 
   if (loading) {
     return <LoadingState label="Opening patient dashboard..." />;
@@ -102,7 +74,8 @@ export default function PatientDashboardPage() {
   }
 
   const patientAssessments = [...assessmentHistory].sort(
-    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+    (left, right) =>
+      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
   );
   const latestAssessment = assessment ?? patientAssessments[0];
   const riskLevel = latestAssessment?.riskLevel;
@@ -136,7 +109,9 @@ export default function PatientDashboardPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div
                 className={`rounded-lg border px-4 py-3 shadow-sm ${
-                  riskLevel ? riskStyles[riskLevel] : "border-slate-200 bg-white text-slate-600"
+                  riskLevel
+                    ? riskStyles[riskLevel]
+                    : "border-slate-200 bg-white text-slate-600"
                 }`}
               >
                 <div className="flex items-center gap-2 text-sm font-semibold">
@@ -154,36 +129,6 @@ export default function PatientDashboardPage() {
               </div>
             </div>
           </div>
-
-          <div className="mt-6 flex flex-col gap-3 border-t border-sky-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Clinical AI analysis</p>
-              <p className="mt-1 text-sm text-slate-600">
-                Run a demo analysis against the current synthetic patient record.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleAnalyzePatient}
-              disabled={isAnalyzing}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-brand-400"
-            >
-              {isAnalyzing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              {isAnalyzing ? "Analyzing..." : "Analyze Patient"}
-            </button>
-          </div>
-
-          {analysisMessage && (
-            <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              {analysisMessage}
-            </div>
-          )}
         </div>
       </article>
 
@@ -197,12 +142,18 @@ export default function PatientDashboardPage() {
       <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
         <article className="flex h-full flex-col rounded-lg border border-sky-100 bg-white p-6 shadow-panel">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight text-slate-800">Risk Flags</h2>
-            <p className="text-sm text-slate-500">Factors contributing to the latest score</p>
+            <h2 className="text-lg font-semibold tracking-tight text-slate-800">
+              Risk Flags
+            </h2>
+            <p className="text-sm text-slate-500">
+              Factors contributing to the latest score
+            </p>
           </div>
           <div className="mt-5 flex flex-1 flex-col gap-3">
             {latestAssessment?.flags.length ? (
-              latestAssessment.flags.map((flag) => <RiskBadge key={flag} flag={flag} />)
+              latestAssessment.flags.map((flag) => (
+                <RiskBadge key={flag} flag={flag} />
+              ))
             ) : (
               <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm text-slate-500">
                 No risk flags are available.
@@ -212,7 +163,10 @@ export default function PatientDashboardPage() {
         </article>
 
         <div className="flex h-full flex-col gap-6">
-          <SummaryCard summary={latestAssessment?.summary} className="lg:flex-1" />
+          <SummaryCard
+            summary={latestAssessment?.summary}
+            className="lg:flex-1"
+          />
           <AssessmentHistory assessments={patientAssessments} />
         </div>
       </div>
