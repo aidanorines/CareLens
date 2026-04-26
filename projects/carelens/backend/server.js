@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const { analyzePatient } = require("./analyze");
+const { parseSystolic } = require("./riskEngine");
 
 const app = express();
 const PORT = 3001;
@@ -153,20 +154,24 @@ app.get("/patients/:id/assessment", (req, res) => {
 
 app.post("/patients/analyze", (req, res) => {
   const patientData = req.body;
+  const systolic = parseSystolic(patientData?.vitals);
 
- if (
-  !patientData ||
-  patientData.age == null ||
-  !patientData.vitals ||
-  (patientData.vitals.bloodPressureSystolic == null &&
-    patientData.vitals.bloodPressure == null) ||
-  patientData.vitals.bmi == null
-) {
-  return res.status(400).json({
-    error: "Missing required patient data",
-    requiredFields: ["age", "vitals.bloodPressureSystolic (or vitals.bloodPressure)", "vitals.bmi"],
-  });
-}
+  if (
+    !patientData ||
+    patientData.age == null ||
+    !patientData.vitals ||
+    systolic == null ||
+    patientData.vitals.bmi == null
+  ) {
+    return res.status(400).json({
+      error: "Missing or invalid patient data",
+      requiredFields: [
+        "age",
+        "vitals.bloodPressureSystolic (number) or vitals.bloodPressure (\"SYS/DIA\")",
+        "vitals.bmi",
+      ],
+    });
+  }
 
   void analyzePatient(patientData)
     .then((result) => {
