@@ -6,8 +6,8 @@
 //
 //   - generateSummary(patient) always resolves to a non-empty string
 //   - The string is one of:
-//       (a) A real AI summary that ends with the clinical disclaimer
-//       (b) The exact "I don't have enough information." line + disclaimer
+//       (a) A real AI summary in the required markdown structure
+//       (b) The exact "I don't have enough information." line
 //       (c) The deterministic system-note fallback (when HF_TOKEN is missing
 //           or the API call fails)
 //
@@ -19,7 +19,6 @@ const assert = require("assert").strict;
 
 const {
   generateSummary,
-  CLINICAL_DISCLAIMER,
   INSUFFICIENT_INFO,
   FALLBACK_MESSAGE,
 } = require(path.join("..", "summaryGenerator"));
@@ -94,8 +93,14 @@ const cases = [
 
 function classify(output) {
   if (output === FALLBACK_MESSAGE) return "fallback";
-  if (output.startsWith(INSUFFICIENT_INFO)) return "insufficient_info";
-  if (output.includes(CLINICAL_DISCLAIMER)) return "ai_summary";
+  if (output.trim() === INSUFFICIENT_INFO) return "insufficient_info";
+  if (
+    output.includes("**Summary**") &&
+    output.includes("**Key Findings**") &&
+    output.includes("**Open Questions**")
+  ) {
+    return "ai_summary";
+  }
   return "unknown";
 }
 
@@ -124,8 +129,16 @@ async function runCase({ name, patient }) {
 
   if (kind === "ai_summary") {
     assert.ok(
-      result.includes(CLINICAL_DISCLAIMER),
-      "AI summary must end with the clinical disclaimer"
+      result.includes("**Summary**"),
+      "AI summary must include **Summary** section"
+    );
+    assert.ok(
+      result.includes("**Key Findings**"),
+      "AI summary must include **Key Findings** section"
+    );
+    assert.ok(
+      result.includes("**Open Questions**"),
+      "AI summary must include **Open Questions** section"
     );
   }
 

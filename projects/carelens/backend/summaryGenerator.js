@@ -9,16 +9,15 @@
 // frontend/src/types/patient.ts and returns a single string ready to be
 // dropped into the Assessment.summary field.
 
-require("dotenv").config();
+try {
+  require("dotenv").config();
+} catch {
+  // dotenv is optional; tests can run with env vars only.
+}
 
 const HF_CHAT_COMPLETIONS_URL = "https://router.huggingface.co/v1/chat/completions";
-const DEFAULT_MODEL = "mistralai/Mistral-7B-Instruct-v0.2";
+const DEFAULT_MODEL = "meta-llama/Llama-3.1-8B-Instruct";
 const REQUEST_TIMEOUT_MS = 15000;
-
-const CLINICAL_DISCLAIMER =
-  "Clinical Disclaimer: This AI-generated summary is for clinical decision " +
-  "support only. It is not a medical diagnosis and must be reviewed by a " +
-  "licensed healthcare professional before any clinical action is taken.";
 
 const INSUFFICIENT_INFO = "I don't have enough information.";
 
@@ -37,11 +36,21 @@ const SYSTEM_PROMPT = [
   "   vitals, allergies, or history.",
   "2. If the data is missing, ambiguous, contradictory, or insufficient to",
   `   summarize confidently, you MUST respond with EXACTLY: "${INSUFFICIENT_INFO}"`,
-  "3. Keep the summary concise and clinically relevant. Prefer short sections",
-  "   such as Demographics, Active Problems, Medications, Vitals, and Risk",
-  "   Factors. Only include sections supported by the provided data.",
-  "4. ALWAYS end your response with this exact disclaimer on its own line:",
-  `   "${CLINICAL_DISCLAIMER}"`,
+  "3. You may suggest open clinical questions to investigate, but you must",
+  "   NEVER answer them, and you must NEVER recommend specific treatments,",
+  "   medications, or diagnostic tests.",
+  "4. Do not label anything as a confirmed diagnosis unless it appears as a",
+  "   condition/problem in the provided data.",
+  "",
+  "FORMAT (MUST follow EXACTLY):",
+  "**Summary**",
+  "[1-2 sentences summarizing the patient's state]",
+  "",
+  "**Key Findings**",
+  "- [Bullet points of relevant conditions, vitals, and meds]",
+  "",
+  "**Open Questions**",
+  "- [Bullet points of clinical questions to investigate]",
 ].join("\n");
 
 function isTokenConfigured(token) {
@@ -53,26 +62,45 @@ function isTokenConfigured(token) {
   );
 }
 
-function withDisclaimer(text) {
-  if (!text) return CLINICAL_DISCLAIMER;
-  const trimmed = text.trim();
-  if (trimmed.includes(CLINICAL_DISCLAIMER)) return trimmed;
-  return `${trimmed}\n\n${CLINICAL_DISCLAIMER}`;
-}
-
 function buildUserMessage(patientData) {
   const json = JSON.stringify(patientData, null, 2);
   return [
     "Summarize the following patient record for a clinician. Use ONLY the",
     `data below. If insufficient, respond EXACTLY with "${INSUFFICIENT_INFO}".`,
-    "Always end with the required clinical disclaimer.",
     "",
     "PATIENT_DATA (JSON):",
     json,
   ].join("\n");
 }
 
+function hasSufficientPatientData(patientData) {
+  if (!patientData || typeof patientData !== "object") return false;
+
+  const vitals = patientData.vitals;
+  const hasVitals =
+    vitals &&
+    typeof vitals === "object" &&
+    (typeof vitals.bloodPressure === "string" ||
+      typeof vitals.heartRate === "number" ||
+      typeof vitals.bmi === "number" ||
+      typeof vitals.temperature === "number" ||
+      typeof vitals.oxygenSaturation === "number");
+
+  const hasConditions =
+    Array.isArray(patientData.conditions) && patientData.conditions.length > 0;
+  const hasMeds =
+    Array.isArray(patientData.medications) && patientData.medications.length > 0;
+  const hasEncounters =
+    Array.isArray(patientData.encounters) && patientData.encounters.length > 0;
+
+  return hasVitals || hasConditions || hasMeds || hasEncounters;
+}
+
 async function generateSummary(patientData) {
+  if (!hasSufficientPatientData(patientData)) {
+    return INSUFFICIENT_INFO;
+  }
+
   const token = process.env.HF_TOKEN;
   if (!isTokenConfigured(token)) {
     return FALLBACK_MESSAGE;
@@ -116,9 +144,9 @@ async function generateSummary(patientData) {
 
     const trimmed = content.trim();
     if (trimmed === INSUFFICIENT_INFO) {
-      return withDisclaimer(INSUFFICIENT_INFO);
+      return INSUFFICIENT_INFO;
     }
-    return withDisclaimer(trimmed);
+    return trimmed;
   } catch (err) {
     if (process.env.NODE_ENV !== "test") {
       console.warn(`[summaryGenerator] AI summary unavailable: ${err.message}`);
@@ -131,7 +159,6 @@ async function generateSummary(patientData) {
 
 module.exports = {
   generateSummary,
-  CLINICAL_DISCLAIMER,
   INSUFFICIENT_INFO,
   FALLBACK_MESSAGE,
 };
