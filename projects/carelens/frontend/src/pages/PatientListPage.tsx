@@ -284,6 +284,11 @@ export default function PatientListPage() {
           const assessment = assessments.find((item) => item.patientId === patient.id);
           const riskLevel = assessment?.riskLevel ?? "Low";
           const RiskIcon = riskIcons[riskLevel];
+          const visibleConditions = patient.conditions.slice(0, 3);
+          const remainingConditions = Math.max(
+            patient.conditions.length - visibleConditions.length,
+            0,
+          );
 
           return (
             <Link
@@ -307,8 +312,29 @@ export default function PatientListPage() {
                     </span>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-slate-600">
-                    Age {patient.age} • {patient.sex} • {patient.conditions.join(", ")}
+                    Age {patient.age} • {patient.sex}
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {visibleConditions.length > 0 ? (
+                      visibleConditions.map((condition) => (
+                        <span
+                          key={condition}
+                          className="max-w-full truncate rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600"
+                        >
+                          {condition}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
+                        No active conditions
+                      </span>
+                    )}
+                    {remainingConditions > 0 && (
+                      <span className="rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+                        + {remainingConditions} more
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2 text-sm text-slate-500 sm:items-end">

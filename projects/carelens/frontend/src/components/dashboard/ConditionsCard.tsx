@@ -17,15 +17,21 @@ export default function ConditionsCard({ conditions }: ConditionsCardProps) {
         </div>
       </div>
 
-      <ul className="mt-5 space-y-3">
-        {conditions.map((condition) => (
-          <li
-            key={condition}
-            className="rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm font-medium text-slate-700"
-          >
-            {condition}
+      <ul className="mt-5 flex flex-wrap gap-2">
+        {conditions.length > 0 ? (
+          conditions.map((condition) => (
+            <li
+              key={condition}
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700"
+            >
+              {condition}
+            </li>
+          ))
+        ) : (
+          <li className="rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm text-slate-500">
+            No active conditions are available.
           </li>
-        ))}
+        )}
       </ul>
     </article>
   );
