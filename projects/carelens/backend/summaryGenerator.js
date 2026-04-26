@@ -2,11 +2,12 @@
 //
 // Calls the Hugging Face Router chat-completions API with a strict clinical
 // decision support prompt. On ANY failure (missing token, non-2xx response,
-// timeout, network error, parse error) returns a fixed system-note string
-// so the demo never breaks.
+// timeout, network error, parse error) returns a deterministic fallback
+// summary so the demo never breaks.
 //
 // Accepts the frontend Patient JSON shape from
-// frontend/src/types/patient.ts and returns a single string ready to be
+// frontend/src/types/patient.ts plus an optional assessmentInput
+// ({ riskLevel, riskScore, flags }) and returns a single string ready to be
 // dropped into the Assessment.summary field.
 
 try {
@@ -27,31 +28,35 @@ const FALLBACK_MESSAGE =
 const SYSTEM_PROMPT = [
   "You are a professional clinical decision support (CDS) assistant. You are",
   "NOT a licensed clinician and you do NOT provide medical diagnoses or",
-  "treatment decisions. Your role is to summarize the structured patient data",
-  "provided in the user message.",
+  "treatment decisions. The patient data is SYNTHETIC and for demonstration",
+  "only.",
   "",
   "STRICT RULES:",
-  "1. ONLY use information from the patient data in the user message. Do NOT",
-  "   use outside knowledge, do NOT invent labs, medications, diagnoses,",
-  "   vitals, allergies, or history.",
+  "1. ONLY use information from the patient data and risk context in the user",
+  "   message. Do NOT use outside knowledge, do NOT invent labs, medications,",
+  "   diagnoses, vitals, allergies, or history.",
   "2. If the data is missing, ambiguous, contradictory, or insufficient to",
   `   summarize confidently, you MUST respond with EXACTLY: "${INSUFFICIENT_INFO}"`,
   "3. You may suggest open clinical questions to investigate, but you must",
   "   NEVER answer them, and you must NEVER recommend specific treatments,",
-  "   medications, or diagnostic tests.",
+  "   medications, medication changes, or diagnostic tests.",
   "4. Do not label anything as a confirmed diagnosis unless it appears as a",
   "   condition/problem in the provided data.",
   "",
-  "FORMAT (MUST follow EXACTLY):",
-  "**Summary**",
-  "[1-2 sentences summarizing the patient's state]",
+  "FORMAT (MUST follow EXACTLY, plain text only, no markdown or asterisks):",
+  "Summary:",
+  "[1-2 sentences summarizing the patient's state and major risk factors]",
   "",
-  "**Key Findings**",
+  "Key Findings:",
   "- [Bullet points of relevant conditions, vitals, and meds]",
   "",
-  "**Open Questions**",
+  "Open Questions:",
   "- [Bullet points of clinical questions to investigate]",
 ].join("\n");
+
+function getApiToken() {
+  return process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
+}
 
 function isTokenConfigured(token) {
   return (
@@ -62,15 +67,55 @@ function isTokenConfigured(token) {
   );
 }
 
-function buildUserMessage(patientData) {
-  const json = JSON.stringify(patientData, null, 2);
-  return [
-    "Summarize the following patient record for a clinician. Use ONLY the",
-    `data below. If insufficient, respond EXACTLY with "${INSUFFICIENT_INFO}".`,
+function normalizeFlags(flags) {
+  if (!Array.isArray(flags)) return [];
+  return flags
+    .map((flag) =>
+      typeof flag === "string" ? flag : flag?.reason || flag?.type || "",
+    )
+    .filter(Boolean);
+}
+
+function buildFallback(assessmentInput) {
+  if (!assessmentInput) return FALLBACK_MESSAGE;
+
+  const riskLevel = assessmentInput.riskLevel || "Unknown";
+  const flagList = normalizeFlags(assessmentInput.flags);
+  const flagsText = flagList.length > 0 ? flagList.join(", ") : "no major flags identified";
+
+  return (
+    `Based on the synthetic record, this patient has a ${riskLevel} risk profile ` +
+    `with key flags including ${flagsText}. Review vitals, conditions, and ` +
+    `recent encounters for follow-up context.`
+  );
+}
+
+function buildUserMessage(patientData, assessmentInput) {
+  const lines = [
+    "Summarize the following SYNTHETIC patient record for a clinician. Use",
+    `ONLY the data below. If insufficient, respond EXACTLY with "${INSUFFICIENT_INFO}".`,
     "",
     "PATIENT_DATA (JSON):",
-    json,
-  ].join("\n");
+    JSON.stringify(patientData, null, 2),
+  ];
+
+  if (assessmentInput) {
+    lines.push(
+      "",
+      "RISK_CONTEXT (computed by rule-based engine, treat as additional evidence):",
+      JSON.stringify(
+        {
+          riskLevel: assessmentInput.riskLevel,
+          riskScore: assessmentInput.riskScore,
+          flags: normalizeFlags(assessmentInput.flags),
+        },
+        null,
+        2,
+      ),
+    );
+  }
+
+  return lines.join("\n");
 }
 
 function hasSufficientPatientData(patientData) {
@@ -96,14 +141,14 @@ function hasSufficientPatientData(patientData) {
   return hasVitals || hasConditions || hasMeds || hasEncounters;
 }
 
-async function generateSummary(patientData) {
+async function generateSummary(patientData, assessmentInput) {
   if (!hasSufficientPatientData(patientData)) {
     return INSUFFICIENT_INFO;
   }
 
-  const token = process.env.HF_TOKEN;
+  const token = getApiToken();
   if (!isTokenConfigured(token)) {
-    return FALLBACK_MESSAGE;
+    return buildFallback(assessmentInput);
   }
 
   const model = process.env.HF_MODEL || DEFAULT_MODEL;
@@ -122,7 +167,7 @@ async function generateSummary(patientData) {
         model,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: buildUserMessage(patientData) },
+          { role: "user", content: buildUserMessage(patientData, assessmentInput) },
         ],
         temperature: 0.2,
         top_p: 0.9,
@@ -133,13 +178,13 @@ async function generateSummary(patientData) {
     });
 
     if (!response.ok) {
-      return FALLBACK_MESSAGE;
+      return buildFallback(assessmentInput);
     }
 
     const json = await response.json();
     const content = json?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) {
-      return FALLBACK_MESSAGE;
+      return buildFallback(assessmentInput);
     }
 
     const trimmed = content.trim();
@@ -151,7 +196,7 @@ async function generateSummary(patientData) {
     if (process.env.NODE_ENV !== "test") {
       console.warn(`[summaryGenerator] AI summary unavailable: ${err.message}`);
     }
-    return FALLBACK_MESSAGE;
+    return buildFallback(assessmentInput);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -159,6 +204,7 @@ async function generateSummary(patientData) {
 
 module.exports = {
   generateSummary,
+  buildFallback,
   INSUFFICIENT_INFO,
   FALLBACK_MESSAGE,
 };

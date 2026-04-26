@@ -3,3 +3,7 @@ dist/
 *.tsbuildinfo
 tailwind.config.d.ts
 vite.config.d.ts
+*_backup/
+*_old/
+*.zip
+synthea_sample_data_ccda_latest/

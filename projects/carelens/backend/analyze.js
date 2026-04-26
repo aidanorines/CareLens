@@ -7,25 +7,31 @@
 //   {
 //     riskScore: number,
 //     riskLevel: "Low" | "Moderate" | "High",
-//     flags: string[],
+//     flags: <risk engine flag objects>,
 //     summary: string
 //   }
 //
-// Sabid: in server.js you can do:
-//   const { analyzePatient } = require("./analyze");
-//   const result = await analyzePatient(patient);
-//   res.json({ id, patientId: patient.id, ...result, createdAt: new Date().toISOString() });
+// The risk context (level, score, flags) is passed into generateSummary so
+// the AI prompt and the deterministic fallback can both reference it.
 
 const riskEngine = require("./riskEngine");
 const { generateSummary } = require("./summaryGenerator");
 
 async function analyzePatient(patient) {
   const { score, level, flags } = riskEngine.analyze(patient);
-  const summary = await generateSummary(patient);
+  const riskLevel = level === "Medium" ? "Moderate" : level;
+
+  const assessmentInput = {
+    riskLevel,
+    riskScore: score,
+    flags,
+  };
+
+  const summary = await generateSummary(patient, assessmentInput);
 
   return {
     riskScore: score,
-    riskLevel: level === "Medium" ? "Moderate" : level,
+    riskLevel,
     flags,
     summary,
   };

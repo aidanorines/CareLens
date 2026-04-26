@@ -1,91 +1,134 @@
+function parseBloodPressure(value) {
+  const match = String(value || "").match(/(\d{2,3})\s*\/\s*(\d{2,3})/);
+  return {
+    systolic: match ? Number(match[1]) : undefined,
+    diastolic: match ? Number(match[2]) : undefined,
+  };
+}
+
 function parseSystolic(vitals) {
   if (!vitals) return null;
 
   if (typeof vitals.bloodPressureSystolic === "number") {
-    return Number.isFinite(vitals.bloodPressureSystolic) ? vitals.bloodPressureSystolic : null;
+    return Number.isFinite(vitals.bloodPressureSystolic)
+      ? vitals.bloodPressureSystolic
+      : null;
   }
 
   if (typeof vitals.bloodPressure === "string") {
-    const [systolic] = vitals.bloodPressure.split("/");
-    const value = Number.parseInt((systolic ?? "").trim(), 10);
-    return Number.isFinite(value) ? value : null;
+    const { systolic } = parseBloodPressure(vitals.bloodPressure);
+    return Number.isFinite(systolic) ? systolic : null;
   }
 
   return null;
 }
 
-function hasDiabetes(conditions) {
-  if (!Array.isArray(conditions)) return false;
-  return conditions.some(
-    (c) => typeof c === "string" && c.toLowerCase().includes("diabetes")
-  );
+function hasCondition(conditions, keyword) {
+  return conditions.some((condition) => condition.includes(keyword));
 }
 
-function analyze(patient) {
-  const risks = [];
-  const vitals = patient?.vitals ?? {};
-  const systolic = parseSystolic(vitals);
+function hasDiabetes(conditions) {
+  return hasCondition(conditions, "diabetes");
+}
 
-  if (systolic != null && systolic > 130) {
+function analyze(patient = {}) {
+  const vitals = patient.vitals || {};
+  const conditions = Array.isArray(patient.conditions)
+    ? patient.conditions.map((c) => String(c).toLowerCase())
+    : [];
+  const encounters = Array.isArray(patient.encounters)
+    ? patient.encounters.map((e) => String(e).toLowerCase())
+    : [];
+
+  const risks = [];
+
+  const systolic = parseSystolic(vitals);
+  const { diastolic } = parseBloodPressure(vitals.bloodPressure);
+  const bmi = Number(vitals.bmi);
+  const heartRate = Number(vitals.heartRate);
+  const oxygenSaturation = Number(vitals.oxygenSaturation);
+
+  if ((systolic && systolic >= 140) || (diastolic && diastolic >= 90)) {
     risks.push({
       type: "High Blood Pressure",
       severity: "High",
-      reason: `Systolic BP ${systolic} is above 130`
+      reason: "Blood pressure is in a high range",
     });
   }
 
-  if (patient.age > 60) {
+  if (Number(patient.age) >= 65) {
     risks.push({
       type: "High Risk Age",
       severity: "Medium",
-      reason: "Patient is above 60"
+      reason: "Patient is 65 or older",
     });
   }
 
-  // BMI check
-  if (typeof vitals.bmi === "number" && vitals.bmi > 30) {
+  if (Number.isFinite(bmi) && bmi >= 30) {
     risks.push({
-      type: "High BMI",
+      type: "Elevated BMI",
       severity: "Medium",
-      reason: "BMI is above 30 (obesity range)"
+      reason: "BMI is in the elevated range",
     });
   }
 
-  // Diabetes + high BP combination
-  if (
-    hasDiabetes(patient.conditions) &&
-    systolic != null &&
-    systolic > 130
-  ) {
+  if (hasDiabetes(conditions) && hasCondition(conditions, "hypertension")) {
     risks.push({
       type: "Diabetes + Hypertension",
       severity: "High",
-      reason: "Combination increases cardiovascular risk"
+      reason: "Diabetes and hypertension together increase cardiovascular risk",
+    });
+  } else if (hasDiabetes(conditions) && systolic && systolic >= 140) {
+    risks.push({
+      type: "Diabetes + High Blood Pressure",
+      severity: "High",
+      reason: "Diabetes with high blood pressure increases cardiovascular risk",
     });
   }
 
-  let score = 0;
-
-  risks.forEach((risk) => {
-    if (risk.severity === "High") score += 30;
-    if (risk.severity === "Medium") score += 15;
-    if (risk.severity === "Low") score += 5;
-  });
-
-  let level = "Low";
-
-  if (score >= 60) {
-    level = "High";
-  } else if (score >= 30) {
-    level = "Medium";
+  if (hasCondition(conditions, "kidney") && hasDiabetes(conditions)) {
+    risks.push({
+      type: "Kidney Disease Complication Risk",
+      severity: "High",
+      reason: "Kidney disease with diabetes may increase complication risk",
+    });
   }
 
-  return {
-    score: score,
-    level: level,
-    flags: risks
-  };
+  if (encounters.some((encounter) => encounter.includes("emergency"))) {
+    risks.push({
+      type: "Recent Emergency Care Use",
+      severity: "Medium",
+      reason: "Record includes an emergency care encounter",
+    });
+  }
 
+  if (Number.isFinite(oxygenSaturation) && oxygenSaturation < 92) {
+    risks.push({
+      type: "Low Oxygen Saturation",
+      severity: "High",
+      reason: "Oxygen saturation is below 92%",
+    });
+  }
+
+  if (Number.isFinite(heartRate) && heartRate > 100) {
+    risks.push({
+      type: "Elevated Heart Rate",
+      severity: "Medium",
+      reason: "Heart rate is above 100 bpm",
+    });
+  }
+
+  const score = risks.reduce((total, risk) => {
+    if (risk.severity === "High") return total + 30;
+    if (risk.severity === "Medium") return total + 15;
+    return total + 5;
+  }, 0);
+
+  let level = "Low";
+  if (score >= 70) level = "High";
+  else if (score >= 35) level = "Moderate";
+
+  return { score, level, flags: risks };
 }
 
-module.exports = { analyze, parseSystolic };
+module.exports = { analyze, parseSystolic, parseBloodPressure };

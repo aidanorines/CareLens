@@ -95,9 +95,9 @@ function classify(output) {
   if (output === FALLBACK_MESSAGE) return "fallback";
   if (output.trim() === INSUFFICIENT_INFO) return "insufficient_info";
   if (
-    output.includes("**Summary**") &&
-    output.includes("**Key Findings**") &&
-    output.includes("**Open Questions**")
+    output.includes("Summary:") &&
+    output.includes("Key Findings:") &&
+    output.includes("Open Questions:")
   ) {
     return "ai_summary";
   }
@@ -129,16 +129,16 @@ async function runCase({ name, patient }) {
 
   if (kind === "ai_summary") {
     assert.ok(
-      result.includes("**Summary**"),
-      "AI summary must include **Summary** section"
+      result.includes("Summary:"),
+      "AI summary must include Summary: section"
     );
     assert.ok(
-      result.includes("**Key Findings**"),
-      "AI summary must include **Key Findings** section"
+      result.includes("Key Findings:"),
+      "AI summary must include Key Findings: section"
     );
     assert.ok(
-      result.includes("**Open Questions**"),
-      "AI summary must include **Open Questions** section"
+      result.includes("Open Questions:"),
+      "AI summary must include Open Questions: section"
     );
   }
 

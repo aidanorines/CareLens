@@ -1,13 +1,21 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
+const multer = require("multer");
+const { XMLParser } = require("fast-xml-parser");
 const { analyzePatient } = require("./analyze");
 const { parseSystolic } = require("./riskEngine");
+const { normalizePatientData } = require("./normalizePatientData");
 
 const app = express();
-const PORT = 3001;
-
-app.use(cors());
-app.use(express.json());
+const PORT = process.env.PORT || 5050;
+const upload = multer({ storage: multer.memoryStorage() });
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  textNodeName: "#text",
+});
 
 const patients = [
   {
@@ -70,45 +78,10 @@ const patients = [
   },
 ];
 
-const assessments = [
-  {
-    id: "a-9001",
-    patientId: "p-1001",
-    riskLevel: "High",
-    riskScore: 88,
-    flags: [
-      "Elevated blood pressure with recent emergency visit",
-      "Diabetes with chronic kidney disease increases complication risk",
-      "Multiple cardiometabolic medications require adherence review",
-    ],
-    summary:
-      "Older adult with diabetes, hypertension, and kidney disease has high near-term risk due to uncontrolled blood pressure, recent acute care use, and complex medication management needs.",
-    createdAt: "2026-04-24T09:30:00Z",
-  },
-  {
-    id: "a-9002",
-    patientId: "p-1002",
-    riskLevel: "Moderate",
-    riskScore: 56,
-    flags: [
-      "Recent asthma flare requiring urgent care",
-      "BMI and lipid history support cardiometabolic monitoring",
-    ],
-    summary:
-      "Moderate risk based on a recent respiratory exacerbation and chronic hyperlipidemia, with stable vitals and no recent hospitalization documented.",
-    createdAt: "2026-04-24T13:15:00Z",
-  },
-  {
-    id: "a-9003",
-    patientId: "p-1003",
-    riskLevel: "Low",
-    riskScore: 18,
-    flags: ["Vitals within expected range", "Stable migraine pattern without acute encounters"],
-    summary:
-      "Low risk synthetic profile with stable chronic migraine history, normal vital signs, and routine outpatient follow-up only.",
-    createdAt: "2026-04-23T16:45:00Z",
-  },
-];
+const assessments = [];
+
+app.use(cors());
+app.use(express.json());
 
 app.get("/", (req, res) => {
   res.json({
@@ -124,12 +97,12 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.get("/patients", (req, res) => {
+app.get("/api/patients", (req, res) => {
   res.json(patients);
 });
 
-app.get("/patients/:id", (req, res) => {
-  const patient = patients.find((p) => p.id === req.params.id);
+app.get("/api/patients/:id", (req, res) => {
+  const patient = patients.find((item) => item.id === req.params.id);
 
   if (!patient) {
     return res.status(404).json({ error: "Patient not found" });
@@ -138,12 +111,12 @@ app.get("/patients/:id", (req, res) => {
   res.json(patient);
 });
 
-app.get("/assessments", (req, res) => {
+app.get("/api/assessments", (req, res) => {
   res.json(assessments);
 });
 
-app.get("/patients/:id/assessment", (req, res) => {
-  const assessment = assessments.find((a) => a.patientId === req.params.id);
+app.get("/api/patients/:id/assessment", (req, res) => {
+  const assessment = assessments.findLast((item) => item.patientId === req.params.id);
 
   if (!assessment) {
     return res.status(404).json({ error: "Assessment not found" });
@@ -152,16 +125,45 @@ app.get("/patients/:id/assessment", (req, res) => {
   res.json(assessment);
 });
 
-app.post("/patients/analyze", (req, res) => {
-  const patientData = req.body;
-  const systolic = parseSystolic(patientData?.vitals);
+app.post("/api/patients/upload", upload.single("file"), async (req, res) => {
+  let rawData = req.body;
+
+  try {
+    if (req.file) {
+      rawData = parseUploadedPatientFile(req.file);
+    }
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  const patient = ensurePatientId(normalizePatientData(rawData));
+  patients.push(patient);
+
+  try {
+    const assessment = await buildAssessment(patient, `a-${Date.now()}`);
+    assessments.push(assessment);
+    res.status(201).json({ patient, assessment });
+  } catch (error) {
+    console.error("[patients/upload] Failed to analyze uploaded patient:", error);
+    res.status(500).json({ error: "Failed to analyze uploaded patient" });
+  }
+});
+
+app.post("/api/patients/:id/analyze", async (req, res) => {
+  const existing = patients.find((item) => item.id === req.params.id);
+
+  if (!existing) {
+    return res.status(404).json({ error: "Patient not found" });
+  }
+
+  const merged = { ...existing, ...req.body };
+  const systolic = parseSystolic(merged.vitals);
 
   if (
-    !patientData ||
-    patientData.age == null ||
-    !patientData.vitals ||
+    merged.age == null ||
+    !merged.vitals ||
     systolic == null ||
-    patientData.vitals.bmi == null
+    merged.vitals.bmi == null
   ) {
     return res.status(400).json({
       error: "Missing or invalid patient data",
@@ -173,20 +175,78 @@ app.post("/patients/analyze", (req, res) => {
     });
   }
 
-  void analyzePatient(patientData)
-    .then((result) => {
-      res.status(201).json({
-        message: "Patient analyzed successfully",
-        patient: patientData,
-        ...result,
-      });
-    })
-    .catch((err) => {
-      console.error("[patients/analyze] Failed to analyze patient:", err);
-      res.status(500).json({ error: "Failed to analyze patient" });
-    });
+  try {
+    const assessment = await buildAssessment(merged, `a-${Date.now()}`);
+    assessments.push(assessment);
+    res.status(201).json(assessment);
+  } catch (error) {
+    console.error("[patients/:id/analyze] Failed to analyze patient:", error);
+    res.status(500).json({ error: "Failed to analyze patient" });
+  }
+});
+
+precomputeSeedAssessments().catch((error) => {
+  console.error("[startup] Failed to pre-compute seed assessments:", error);
 });
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+async function precomputeSeedAssessments() {
+  await Promise.all(
+    patients.map(async (patient, index) => {
+      const assessment = await buildAssessment(patient, `a-900${index + 1}`);
+      assessments.push(assessment);
+    }),
+  );
+}
+
+async function buildAssessment(patient, id) {
+  const result = await analyzePatient(patient);
+  const flags = (result.flags || [])
+    .map((flag) =>
+      typeof flag === "string" ? flag : flag.reason || flag.type,
+    )
+    .filter(Boolean);
+
+  return {
+    id,
+    patientId: patient.id,
+    riskLevel: result.riskLevel,
+    riskScore: result.riskScore,
+    flags,
+    summary: result.summary,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function parseUploadedPatientFile(file) {
+  const filename = String(file.originalname || "").toLowerCase();
+  const content = file.buffer.toString("utf8");
+
+  if (filename.endsWith(".json")) {
+    try {
+      return JSON.parse(content);
+    } catch {
+      throw new Error("Invalid JSON patient record.");
+    }
+  }
+
+  if (filename.endsWith(".xml")) {
+    try {
+      return xmlParser.parse(content);
+    } catch {
+      throw new Error("Invalid XML patient record.");
+    }
+  }
+
+  throw new Error("Only FHIR JSON or C-CDA XML patient records are supported.");
+}
+
+function ensurePatientId(patient) {
+  return {
+    ...patient,
+    id: patient.id || `p-${Date.now()}`,
+  };
+}
