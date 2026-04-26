@@ -20,12 +20,12 @@ const riskEngine = require("./riskEngine");
 const { generateSummary } = require("./summaryGenerator");
 
 async function analyzePatient(patient) {
-  const { riskScore, riskLevel, flags } = riskEngine.analyze(patient);
+  const { score, level, flags } = riskEngine.analyze(patient);
   const summary = await generateSummary(patient);
 
   return {
-    riskScore,
-    riskLevel,
+    riskScore: score,
+    riskLevel: level === "Medium" ? "Moderate" : level,
     flags,
     summary,
   };
