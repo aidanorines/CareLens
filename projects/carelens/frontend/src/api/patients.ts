@@ -56,9 +56,10 @@ export async function getAssessmentByPatientId(
   }
 }
 
-export async function uploadPatient(patient: PatientUpload): Promise<UploadPatientResponse> {
+export async function uploadPatient(patient: PatientUpload | File): Promise<UploadPatientResponse> {
   try {
-    const response = await api.post<UploadPatientResponse>("/patients/upload", patient);
+    const body = patient instanceof File ? fileUploadFormData(patient) : patient;
+    const response = await api.post<UploadPatientResponse>("/patients/upload", body);
     return response.data;
   } catch {
     const fallbackPatient = normalizePatientUpload(patient);
@@ -82,7 +83,26 @@ export async function analyzePatient(patientId: string): Promise<Assessment | un
   }
 }
 
-function normalizePatientUpload(patient: PatientUpload): Patient {
+function fileUploadFormData(file: File): FormData {
+  const formData = new FormData();
+  formData.append("file", file);
+  return formData;
+}
+
+function normalizePatientUpload(patient: PatientUpload | File): Patient {
+  if (patient instanceof File) {
+    return {
+      id: `local-${Date.now()}`,
+      name: patient.name.replace(/\.(json|xml)$/i, "") || "Uploaded Patient",
+      age: 0,
+      sex: "Unknown",
+      conditions: [],
+      medications: [],
+      vitals: {},
+      encounters: [],
+    };
+  }
+
   return {
     id: patient.id || `local-${Date.now()}`,
     name: patient.name || "Uploaded Patient",

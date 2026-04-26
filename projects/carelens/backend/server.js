@@ -1,11 +1,19 @@
 const express = require("express");
 const cors = require("cors");
+const multer = require("multer");
+const { XMLParser } = require("fast-xml-parser");
 const riskEngine = require("./riskEngine");
 const summaryGenerator = require("./summaryGenerator");
 const { normalizePatientData } = require("./normalizePatientData");
 
 const app = express();
 const PORT = process.env.PORT || 5050;
+const upload = multer({ storage: multer.memoryStorage() });
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  textNodeName: "#text",
+});
 
 const patients = [
   {
@@ -115,8 +123,18 @@ app.get("/api/patients/:id/assessment", (req, res) => {
   res.json(assessment);
 });
 
-app.post("/api/patients/upload", (req, res) => {
-  const patient = normalizePatientData(req.body);
+app.post("/api/patients/upload", upload.single("file"), (req, res) => {
+  let rawData = req.body;
+
+  try {
+    if (req.file) {
+      rawData = parseUploadedPatientFile(req.file);
+    }
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  const patient = normalizePatientData(rawData);
   patients.push(patient);
 
   const assessment = buildAssessment(patient, `a-${Date.now()}`);
@@ -156,6 +174,29 @@ function buildAssessment(patient, id) {
     summary: summaryGenerator.generate(analysisInput, analysis.flags),
     createdAt: new Date().toISOString(),
   };
+}
+
+function parseUploadedPatientFile(file) {
+  const filename = String(file.originalname || "").toLowerCase();
+  const content = file.buffer.toString("utf8");
+
+  if (filename.endsWith(".json")) {
+    try {
+      return JSON.parse(content);
+    } catch {
+      throw new Error("Invalid JSON patient record.");
+    }
+  }
+
+  if (filename.endsWith(".xml")) {
+    try {
+      return xmlParser.parse(content);
+    } catch {
+      throw new Error("Invalid XML patient record.");
+    }
+  }
+
+  throw new Error("Only JSON or XML patient records are supported.");
 }
 
 function toRiskEnginePatient(patient) {

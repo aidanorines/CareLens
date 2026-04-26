@@ -81,12 +81,12 @@ export default function PatientListPage() {
     setUploadSuccess("");
     setSelectedFile(file);
 
-    if (file && !file.name.toLowerCase().endsWith(".json")) {
-      setUploadError("Please select a .json file.");
+    if (file && !isSupportedPatientFile(file)) {
+      setUploadError("Only JSON or XML patient records are supported.");
     }
   }
 
-  async function importPatientRecord(payload: Partial<Patient>, successMessage: string) {
+  async function importPatientRecord(payload: Partial<Patient> | File, successMessage: string) {
     setUploading(true);
 
     try {
@@ -124,27 +124,27 @@ export default function PatientListPage() {
     setUploadSuccess("");
 
     if (!selectedFile) {
-      setUploadError("Choose a patient JSON file before uploading.");
+      setUploadError("Choose a patient JSON or XML file before uploading.");
       return;
     }
 
-    if (!selectedFile.name.toLowerCase().endsWith(".json")) {
-      setUploadError("Please select a .json file.");
+    if (!isSupportedPatientFile(selectedFile)) {
+      setUploadError("Only JSON or XML patient records are supported.");
       return;
     }
 
-    try {
-      const payload = JSON.parse(await selectedFile.text()) as Partial<Patient>;
-      await importPatientRecord(payload, `${selectedFile.name} imported successfully.`);
-    } catch {
-      setUploadError("Upload failed: JSON is not valid.");
-    }
+    await importPatientRecord(selectedFile, `${selectedFile.name} imported successfully.`);
   }
 
   async function handleLoadSamplePatient() {
     setUploadError("");
     setUploadSuccess("");
     await importPatientRecord(samplePatientRecord, "Sample patient imported successfully.");
+  }
+
+  function isSupportedPatientFile(file: File) {
+    const name = file.name.toLowerCase();
+    return name.endsWith(".json") || name.endsWith(".xml");
   }
 
   if (loading) {
@@ -205,13 +205,13 @@ export default function PatientListPage() {
               <span className="min-w-0 truncate">
                 {selectedFile
                   ? selectedFile.name
-                  : "Select synthetic patient JSON (FHIR or CCDA-derived format)"}
+                  : "Select synthetic patient file (FHIR JSON or CCDA XML)"}
               </span>
               <span className="shrink-0 font-semibold text-brand-700">Browse</span>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".json,application/json"
+                accept=".json,.xml,application/json,application/xml,text/xml"
                 onChange={handleFileChange}
                 className="sr-only"
               />
@@ -237,7 +237,7 @@ export default function PatientListPage() {
               Load Sample Patient
             </button>
             <p className="text-xs leading-5 text-slate-500">
-              Use a built-in synthetic record for a quick demo.
+              Supports Synthea FHIR JSON and CCDA XML demo records.
             </p>
           </div>
         </div>
