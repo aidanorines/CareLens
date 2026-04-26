@@ -158,11 +158,13 @@ app.post("/patients/analyze", (req, res) => {
   !patientData ||
   patientData.age == null ||
   !patientData.vitals ||
+  (patientData.vitals.bloodPressureSystolic == null &&
+    patientData.vitals.bloodPressure == null) ||
   patientData.vitals.bmi == null
 ) {
   return res.status(400).json({
     error: "Missing required patient data",
-    requiredFields: ["age", "vitals.bmi"],
+    requiredFields: ["age", "vitals.bloodPressureSystolic (or vitals.bloodPressure)", "vitals.bmi"],
   });
 }
 
