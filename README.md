@@ -70,7 +70,7 @@ npm install
 npm run dev
 ```
 
-## Open the URL shown in the terminal (usually):
+## Open the URL shown in the terminal:
 ```
 http://localhost:5173
 ```
