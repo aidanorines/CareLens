@@ -1,9 +1,11 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const { XMLParser } = require("fast-xml-parser");
-const riskEngine = require("./riskEngine");
-const summaryGenerator = require("./summaryGenerator");
+const { analyzePatient } = require("./analyze");
+const { parseSystolic } = require("./riskEngine");
 const { normalizePatientData } = require("./normalizePatientData");
 
 const app = express();
@@ -76,7 +78,7 @@ const patients = [
   },
 ];
 
-const assessments = patients.map((patient, index) => buildAssessment(patient, `a-900${index + 1}`));
+const assessments = [];
 
 app.use(cors());
 app.use(express.json());
@@ -84,14 +86,14 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.json({
     message: "CareLens backend is running",
-    status: "OK"
+    status: "OK",
   });
 });
 
 app.get("/health", (req, res) => {
   res.json({
     status: "OK",
-    service: "CareLens Backend"
+    service: "CareLens Backend",
   });
 });
 
@@ -123,7 +125,7 @@ app.get("/api/patients/:id/assessment", (req, res) => {
   res.json(assessment);
 });
 
-app.post("/api/patients/upload", upload.single("file"), (req, res) => {
+app.post("/api/patients/upload", upload.single("file"), async (req, res) => {
   let rawData = req.body;
 
   try {
@@ -137,41 +139,84 @@ app.post("/api/patients/upload", upload.single("file"), (req, res) => {
   const patient = ensurePatientId(normalizePatientData(rawData));
   patients.push(patient);
 
-  const assessment = buildAssessment(patient, `a-${Date.now()}`);
-  assessments.push(assessment);
-
-  res.status(201).json({ patient, assessment });
+  try {
+    const assessment = await buildAssessment(patient, `a-${Date.now()}`);
+    assessments.push(assessment);
+    res.status(201).json({ patient, assessment });
+  } catch (error) {
+    console.error("[patients/upload] Failed to analyze uploaded patient:", error);
+    res.status(500).json({ error: "Failed to analyze uploaded patient" });
+  }
 });
 
-app.post("/api/patients/:id/analyze", (req, res) => {
-  const patient = patients.find((item) => item.id === req.params.id);
+app.post("/api/patients/:id/analyze", async (req, res) => {
+  const existing = patients.find((item) => item.id === req.params.id);
 
-  if (!patient) {
+  if (!existing) {
     return res.status(404).json({ error: "Patient not found" });
   }
 
-  const assessment = buildAssessment({ ...patient, ...req.body }, `a-${Date.now()}`);
-  assessments.push(assessment);
+  const merged = { ...existing, ...req.body };
+  const systolic = parseSystolic(merged.vitals);
 
-  res.status(201).json(assessment);
+  if (
+    merged.age == null ||
+    !merged.vitals ||
+    systolic == null ||
+    merged.vitals.bmi == null
+  ) {
+    return res.status(400).json({
+      error: "Missing or invalid patient data",
+      requiredFields: [
+        "age",
+        "vitals.bloodPressureSystolic (number) or vitals.bloodPressure (\"SYS/DIA\")",
+        "vitals.bmi",
+      ],
+    });
+  }
+
+  try {
+    const assessment = await buildAssessment(merged, `a-${Date.now()}`);
+    assessments.push(assessment);
+    res.status(201).json(assessment);
+  } catch (error) {
+    console.error("[patients/:id/analyze] Failed to analyze patient:", error);
+    res.status(500).json({ error: "Failed to analyze patient" });
+  }
+});
+
+precomputeSeedAssessments().catch((error) => {
+  console.error("[startup] Failed to pre-compute seed assessments:", error);
 });
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-function buildAssessment(patient, id) {
-  const analysisInput = toRiskEnginePatient(patient);
-  const analysis = riskEngine.analyze(analysisInput);
-  const flags = analysis.flags.map((flag) => typeof flag === "string" ? flag : flag.reason || flag.type).filter(Boolean);
+async function precomputeSeedAssessments() {
+  await Promise.all(
+    patients.map(async (patient, index) => {
+      const assessment = await buildAssessment(patient, `a-900${index + 1}`);
+      assessments.push(assessment);
+    }),
+  );
+}
+
+async function buildAssessment(patient, id) {
+  const result = await analyzePatient(patient);
+  const flags = (result.flags || [])
+    .map((flag) =>
+      typeof flag === "string" ? flag : flag.reason || flag.type,
+    )
+    .filter(Boolean);
 
   return {
     id,
     patientId: patient.id,
-    riskLevel: analysis.level === "Medium" ? "Moderate" : analysis.level,
-    riskScore: analysis.score,
+    riskLevel: result.riskLevel,
+    riskScore: result.riskScore,
     flags,
-    summary: summaryGenerator.generate(analysisInput, analysis.flags),
+    summary: result.summary,
     createdAt: new Date().toISOString(),
   };
 }
@@ -203,17 +248,5 @@ function ensurePatientId(patient) {
   return {
     ...patient,
     id: patient.id || `p-${Date.now()}`,
-  };
-}
-
-function toRiskEnginePatient(patient) {
-  const systolic = Number.parseInt(String(patient.vitals?.bloodPressure ?? ""), 10);
-
-  return {
-    ...patient,
-    vitals: {
-      ...(patient.vitals || {}),
-      bloodPressureSystolic: Number.isNaN(systolic) ? undefined : systolic,
-    },
   };
 }
