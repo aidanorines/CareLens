@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const riskEngine = require("./riskEngine");
 const summaryGenerator = require("./summaryGenerator");
+const { normalizePatientData } = require("./normalizePatientData");
 
 const app = express();
 const PORT = process.env.PORT || 5050;
@@ -115,7 +116,7 @@ app.get("/api/patients/:id/assessment", (req, res) => {
 });
 
 app.post("/api/patients/upload", (req, res) => {
-  const patient = normalizePatientUpload(req.body);
+  const patient = normalizePatientData(req.body);
   patients.push(patient);
 
   const assessment = buildAssessment(patient, `a-${Date.now()}`);
@@ -154,19 +155,6 @@ function buildAssessment(patient, id) {
     flags,
     summary: summaryGenerator.generate(analysisInput, analysis.flags),
     createdAt: new Date().toISOString(),
-  };
-}
-
-function normalizePatientUpload(body) {
-  return {
-    id: body.id || `p-${Date.now()}`,
-    name: body.name || "Unnamed Patient",
-    age: Number(body.age) || 0,
-    sex: body.sex || "Unknown",
-    conditions: Array.isArray(body.conditions) ? body.conditions : [],
-    medications: Array.isArray(body.medications) ? body.medications : [],
-    vitals: body.vitals || {},
-    encounters: Array.isArray(body.encounters) ? body.encounters : [],
   };
 }
 
