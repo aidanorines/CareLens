@@ -56,3 +56,27 @@ cd projects/carelens/backend
 npm install
 node server.js
 ```
+
+#### Backend runs on:
+```
+http://localhost:3001
+```
+
+## Frontend
+
+```
+cd projects/carelens/frontend
+npm install
+npm run dev
+```
+
+## Open the URL shown in the terminal (usually):
+```
+http://localhost:5173
+```
+
+## Notes
+
+* Uses synthetic patient data only
+* Not intended for real clinical decision-making
+* Built within a 36-hour hackathon sprint
