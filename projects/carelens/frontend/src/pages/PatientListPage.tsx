@@ -1,5 +1,3 @@
-import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -10,6 +8,8 @@ import {
   ShieldQuestion,
   Upload,
 } from "lucide-react";
+import type { ChangeEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getAssessments, getPatients, uploadPatient } from "../api/patients";
 import EmptyState from "../components/EmptyState";
@@ -53,11 +53,16 @@ export default function PatientListPage() {
   const [highlightedPatientId, setHighlightedPatientId] = useState("");
   const patientListRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   useEffect(() => {
     async function loadPatients() {
-      const [data, assessmentData] = await Promise.all([getPatients(), getAssessments()]);
+      const [data, assessmentData] = await Promise.all([
+        getPatients(),
+        getAssessments(),
+      ]);
       setPatients(data);
       setAssessments(assessmentData);
       setLoading(false);
@@ -82,16 +87,24 @@ export default function PatientListPage() {
     setSelectedFile(file);
 
     if (file && !isSupportedPatientFile(file)) {
-      setUploadError("Only FHIR JSON or C-CDA XML patient records are supported.");
+      setUploadError(
+        "Only FHIR JSON or C-CDA XML patient records are supported."
+      );
     }
   }
 
-  async function importPatientRecord(payload: Partial<Patient> | File, successMessage: string) {
+  async function importPatientRecord(
+    payload: Partial<Patient> | File,
+    successMessage: string
+  ) {
     setUploading(true);
 
     try {
       const { patient, assessment } = await uploadPatient(payload);
-      setPatients((current) => [patient, ...current.filter((item) => item.id !== patient.id)]);
+      setPatients((current) => [
+        patient,
+        ...current.filter((item) => item.id !== patient.id),
+      ]);
       setAssessments((current) => [
         assessment,
         ...current.filter((item) => item.id !== assessment.id),
@@ -102,7 +115,10 @@ export default function PatientListPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-      patientListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      patientListRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
 
       if (highlightTimeoutRef.current) {
         clearTimeout(highlightTimeoutRef.current);
@@ -129,17 +145,25 @@ export default function PatientListPage() {
     }
 
     if (!isSupportedPatientFile(selectedFile)) {
-      setUploadError("Only FHIR JSON or C-CDA XML patient records are supported.");
+      setUploadError(
+        "Only FHIR JSON or C-CDA XML patient records are supported."
+      );
       return;
     }
 
-    await importPatientRecord(selectedFile, "Patient record imported successfully.");
+    await importPatientRecord(
+      selectedFile,
+      "Patient record imported successfully."
+    );
   }
 
   async function handleLoadSamplePatient() {
     setUploadError("");
     setUploadSuccess("");
-    await importPatientRecord(samplePatientRecord, "Sample patient imported successfully.");
+    await importPatientRecord(
+      samplePatientRecord,
+      "Sample patient imported successfully."
+    );
   }
 
   function isSupportedPatientFile(file: File) {
@@ -170,8 +194,9 @@ export default function PatientListPage() {
           Patient Risk Queue
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-          Frontend scaffold for the CareLens hackathon demo. This page is wired with mock
-          patient data so the experience works without the backend during UI development.
+          Frontend scaffold for the CareLens hackathon demo. This page is wired
+          with mock patient data so the experience works without the backend
+          during UI development.
         </p>
       </div>
 
@@ -189,13 +214,13 @@ export default function PatientListPage() {
                 Import Patient Record
               </h2>
               <p className="max-w-2xl text-sm leading-6 text-slate-600">
-                Simulates importing structured patient data from an electronic health record (EHR)
-                system.
+                Simulates importing structured patient data from an electronic
+                health record (EHR) system.
               </p>
               <div className="flex items-start gap-2 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-800">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                Demo uses synthetic Synthea-generated records. No real patient data should be
-                uploaded.
+                Demo uses synthetic Synthea-generated records. No real patient
+                data should be uploaded.
               </div>
             </div>
           </div>
@@ -207,7 +232,9 @@ export default function PatientListPage() {
                   ? selectedFile.name
                   : "Select synthetic patient file"}
               </span>
-              <span className="shrink-0 font-semibold text-brand-700">Browse</span>
+              <span className="shrink-0 font-semibold text-brand-700">
+                Browse
+              </span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -244,9 +271,12 @@ export default function PatientListPage() {
 
         <details className="mt-5 rounded-lg border border-slate-200 bg-slate-50/70 px-4 py-3">
           <summary className="cursor-pointer text-sm font-semibold text-slate-700">
-            View Example Record Format
+            View Example Record Format (Demo JSON)
           </summary>
-          <p className="mt-2 text-xs text-slate-500">See expected JSON structure</p>
+          <p className="mt-2 text-xs text-slate-500">
+            Supports FHIR JSON, C-CDA XML, or this simplified demo JSON format
+            for testing.
+          </p>
           <pre className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-700">
             <code>{JSON.stringify(samplePatientRecord, null, 2)}</code>
           </pre>
@@ -273,7 +303,9 @@ export default function PatientListPage() {
             <h2 className="text-xl font-semibold tracking-tight text-slate-950">
               Available Patients
             </h2>
-            <p className="mt-1 text-sm text-slate-600">Preloaded synthetic patient records</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Preloaded synthetic patient records
+            </p>
           </div>
           <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800">
             {patients.length} records
@@ -281,13 +313,15 @@ export default function PatientListPage() {
         </div>
 
         {patients.map((patient) => {
-          const assessment = assessments.find((item) => item.patientId === patient.id);
+          const assessment = assessments.find(
+            (item) => item.patientId === patient.id
+          );
           const riskLevel = assessment?.riskLevel ?? "Low";
           const RiskIcon = riskIcons[riskLevel];
           const visibleConditions = patient.conditions.slice(0, 3);
           const remainingConditions = Math.max(
             patient.conditions.length - visibleConditions.length,
-            0,
+            0
           );
 
           return (
@@ -303,7 +337,9 @@ export default function PatientListPage() {
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                    <h2 className="text-xl font-semibold text-slate-900">{patient.name}</h2>
+                    <h2 className="text-xl font-semibold text-slate-900">
+                      {patient.name}
+                    </h2>
                     <span
                       className={`inline-flex w-fit items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${riskStyles[riskLevel]}`}
                     >
