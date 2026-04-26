@@ -82,7 +82,7 @@ export default function PatientListPage() {
     setSelectedFile(file);
 
     if (file && !isSupportedPatientFile(file)) {
-      setUploadError("Only JSON or XML patient records are supported.");
+      setUploadError("Only FHIR JSON or C-CDA XML patient records are supported.");
     }
   }
 
@@ -129,11 +129,11 @@ export default function PatientListPage() {
     }
 
     if (!isSupportedPatientFile(selectedFile)) {
-      setUploadError("Only JSON or XML patient records are supported.");
+      setUploadError("Only FHIR JSON or C-CDA XML patient records are supported.");
       return;
     }
 
-    await importPatientRecord(selectedFile, `${selectedFile.name} imported successfully.`);
+    await importPatientRecord(selectedFile, "Patient record imported successfully.");
   }
 
   async function handleLoadSamplePatient() {
@@ -183,7 +183,7 @@ export default function PatientListPage() {
             </div>
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                FHIR / CCDA synthetic data (Synthea compatible)
+                FHIR JSON / C-CDA XML
               </p>
               <h2 className="text-lg font-semibold tracking-tight text-slate-900">
                 Import Patient Record
@@ -205,7 +205,7 @@ export default function PatientListPage() {
               <span className="min-w-0 truncate">
                 {selectedFile
                   ? selectedFile.name
-                  : "Select synthetic patient file (FHIR JSON or CCDA XML)"}
+                  : "Select synthetic patient file"}
               </span>
               <span className="shrink-0 font-semibold text-brand-700">Browse</span>
               <input
@@ -237,7 +237,7 @@ export default function PatientListPage() {
               Load Sample Patient
             </button>
             <p className="text-xs leading-5 text-slate-500">
-              Supports Synthea FHIR JSON and CCDA XML demo records.
+              Supports Synthea FHIR JSON and C-CDA XML demo records.
             </p>
           </div>
         </div>
