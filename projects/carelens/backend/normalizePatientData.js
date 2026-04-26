@@ -39,8 +39,8 @@ function normalizeCCDA(rawData) {
     name: ccdaPatientName(findFirstByLocalName(patient, "name")) || "Unnamed Patient",
     age: calculateAge(birthDate),
     sex: formatCcdaSex(findFirstByLocalName(patient, "administrativeGenderCode")),
-    conditions: uniqueStrings(extractCcdaSectionText(sections, ["problem", "condition"])),
-    medications: uniqueStrings(extractCcdaMedications(sections)),
+    conditions: extractCcdaConditions(sections),
+    medications: extractCcdaMedications(sections),
     vitals: extractCcdaVitals(sections),
     encounters: uniqueStrings(extractCcdaSectionText(sections, ["encounter"])),
   };
@@ -160,8 +160,18 @@ function extractCcdaSectionText(sections, titleParts) {
     .flatMap((section) => findAllDisplayText(section));
 }
 
+function extractCcdaConditions(sections) {
+  return uniqueStrings(
+    sections
+      .filter((section) => sectionMatches(section, ["problem", "condition"]))
+      .flatMap((section) => findAllDisplayText(section))
+      .map(cleanCcdaCondition)
+      .filter(isUsefulClinicalCondition),
+  ).slice(0, 7);
+}
+
 function extractCcdaMedications(sections) {
-  return sections
+  return uniqueStrings(sections
     .filter((section) => sectionMatches(section, ["medication"]))
     .flatMap((section) => {
       const medicationMaterials = findAllByLocalName(section, "manufacturedMaterial");
@@ -169,32 +179,40 @@ function extractCcdaMedications(sections) {
         displayText(findFirstByLocalName(material, "code")),
       );
       return medicationDisplays.length > 0 ? medicationDisplays : findAllDisplayText(section);
-    });
+    })
+    .map(cleanMedicationName)
+    .filter(isUsefulMedicationName));
 }
 
 function extractCcdaVitals(sections) {
   const vitals = {};
   const vitalSections = sections.filter((section) => sectionMatches(section, ["vital"]));
+  const observations = vitalSections.flatMap((section) => findAllByLocalName(section, "observation"));
+  const systolic = findCcdaVitalValue(observations, ["systolic"], ["8480-6"]);
+  const diastolic = findCcdaVitalValue(observations, ["diastolic"], ["8462-4"]);
 
-  vitalSections.flatMap((section) => findAllByLocalName(section, "observation")).forEach((observation) => {
+  if (systolic !== undefined || diastolic !== undefined) {
+    vitals.bloodPressure =
+      systolic !== undefined && diastolic !== undefined
+        ? `${systolic}/${diastolic}`
+        : String(systolic ?? diastolic);
+  }
+
+  observations.forEach((observation) => {
     const label = displayText(findFirstByLocalName(observation, "code")).toLowerCase();
+    const code = stringOrUndefined(attributeValue(findFirstByLocalName(observation, "code")));
     const valueNode = findFirstByLocalName(observation, "value");
     const value = numericOrUndefined(attributeValue(valueNode) || valueNode);
 
     if (value === undefined) return;
 
-    if (label.includes("systolic")) {
-      const diastolic = findSiblingVitalValue(vitalSections, "diastolic");
-      vitals.bloodPressure = diastolic === undefined ? String(value) : `${value}/${diastolic}`;
-    } else if (label.includes("diastolic") && !vitals.bloodPressure) {
-      vitals.bloodPressure = String(value);
-    } else if (label.includes("heart rate")) {
+    if (matchesCode(label, [code], ["heart rate"], ["8867-4"])) {
       vitals.heartRate = value;
-    } else if (label.includes("body mass index") || label.includes("bmi")) {
+    } else if (matchesCode(label, [code], ["body mass index", "bmi"], ["39156-5"])) {
       vitals.bmi = value;
-    } else if (label.includes("temperature")) {
+    } else if (matchesCode(label, [code], ["body temperature", "temperature"], ["8310-5"])) {
       vitals.temperature = value;
-    } else if (label.includes("oxygen")) {
+    } else if (matchesCode(label, [code], ["oxygen saturation", "spo2", "oxygen"], ["59408-5", "2708-6"])) {
       vitals.oxygenSaturation = value;
     }
   });
@@ -202,13 +220,114 @@ function extractCcdaVitals(sections) {
   return vitals;
 }
 
-function findSiblingVitalValue(sections, labelPart) {
-  const observation = sections
-    .flatMap((section) => findAllByLocalName(section, "observation"))
-    .find((item) => displayText(findFirstByLocalName(item, "code")).toLowerCase().includes(labelPart));
+function findCcdaVitalValue(observations, labelParts, targetCodes) {
+  const observation = observations.find((item) => {
+    const codeNode = findFirstByLocalName(item, "code");
+    const label = displayText(codeNode).toLowerCase();
+    const code = stringOrUndefined(attributeValue(codeNode));
+    return matchesCode(label, [code], labelParts, targetCodes);
+  });
 
   const valueNode = findFirstByLocalName(observation, "value");
   return numericOrUndefined(attributeValue(valueNode) || valueNode);
+}
+
+function cleanCcdaCondition(value) {
+  return stripClinicalSuffix(value)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanMedicationName(value) {
+  return stripClinicalSuffix(value)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripClinicalSuffix(value) {
+  return String(value || "")
+    .replace(/\s+\((disorder|finding|situation|procedure|observable entity)\)$/i, "")
+    .trim();
+}
+
+function isUsefulClinicalCondition(value) {
+  const condition = stringOrUndefined(value);
+  if (!condition) return false;
+
+  const normalized = condition.toLowerCase();
+  const blockedPhrases = [
+    "problem list",
+    "condition",
+    "medication review due",
+    "normal pregnancy",
+    "full-time employment",
+    "part-time employment",
+    "not in labor force",
+    "social isolation",
+    "only received primary school education",
+    "limited social contact",
+    "stress",
+    "risk activity involvement",
+    "victim of intimate partner abuse",
+    "education",
+    "employment",
+    "social contact",
+    "social determinant",
+  ];
+
+  if (blockedPhrases.some((phrase) => normalized === phrase || normalized.includes(phrase))) {
+    return false;
+  }
+
+  const clinicalKeywords = [
+    "migraine",
+    "chronic pain",
+    "gingivitis",
+    "gingival",
+    "sinusitis",
+    "pharyngitis",
+    "cough",
+    "dyspnea",
+    "wheezing",
+    "fever",
+    "fatigue",
+    "hyperlipidemia",
+    "diabetes",
+    "hypertension",
+    "kidney",
+    "asthma",
+    "overdose",
+    "gunshot",
+    "bullet",
+    "covid",
+    "coronavirus",
+    "severe acute respiratory",
+    "sars",
+    "molars",
+    "drug abuse",
+  ];
+
+  return clinicalKeywords.some((keyword) => normalized.includes(keyword));
+}
+
+function isUsefulMedicationName(value) {
+  const medication = stringOrUndefined(value);
+  if (!medication) return false;
+
+  const normalized = medication.toLowerCase();
+  const tableNoise = [
+    "medications",
+    "medication",
+    "start",
+    "stop",
+    "status",
+    "description",
+    "instructions",
+    "reason",
+    "date",
+  ];
+
+  return !tableNoise.some((noise) => normalized === noise);
 }
 
 function sectionMatches(section, titleParts) {

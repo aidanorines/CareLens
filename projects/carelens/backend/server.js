@@ -114,7 +114,7 @@ app.get("/api/assessments", (req, res) => {
 });
 
 app.get("/api/patients/:id/assessment", (req, res) => {
-  const assessment = assessments.find((item) => item.patientId === req.params.id);
+  const assessment = assessments.findLast((item) => item.patientId === req.params.id);
 
   if (!assessment) {
     return res.status(404).json({ error: "Assessment not found" });
@@ -196,7 +196,7 @@ function parseUploadedPatientFile(file) {
     }
   }
 
-  throw new Error("Only JSON or XML patient records are supported.");
+  throw new Error("Only FHIR JSON or C-CDA XML patient records are supported.");
 }
 
 function ensurePatientId(patient) {
