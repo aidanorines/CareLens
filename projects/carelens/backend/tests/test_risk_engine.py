@@ -25,6 +25,8 @@ def test_demo_patient_elena_defaults_and_temp_conversion():
 
     assert result["spo2_scale"] == "Scale1"
     assert result["score"] is not None
+    assert result["risk_level"] in ("Low", "Moderate", "High")
+    assert isinstance(result["flags"], list)
     assert result["components"]["systolic_bp"] == 0  # SBP 168 -> 0
     assert result["components"]["heart_rate"] == 1  # HR 92 -> 1
     assert result["components"]["spo2"] == 1  # SpO2 94 -> 1
@@ -49,6 +51,7 @@ def test_missing_spo2_is_insufficient_data_even_with_defaults():
 
     result = compute_news2_score(patient)
     assert result["category"] == "Insufficient Data"
+    assert result["risk_level"] == "Insufficient Data"
     assert "spo2" in result["missing_fields"]
 
 
@@ -69,4 +72,5 @@ def test_single_three_point_parameter_triggers_medium_category():
     result = compute_news2_score(patient)
     assert result["components"]["resp_rate"] == 3
     assert result["category"] == "Medium"
+    assert result["risk_level"] == "Moderate"
 

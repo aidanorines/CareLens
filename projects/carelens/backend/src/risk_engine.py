@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict, Union
 
 
 RiskCategory = Literal["Low", "Medium", "High", "Insufficient Data"]
+UiRiskLevel = Literal["Low", "Moderate", "High", "Insufficient Data"]
 Avpu = Literal["A", "V", "P", "U"]
 
 
@@ -36,11 +37,60 @@ class News2Components(TypedDict, total=False):
 class News2Result(TypedDict):
     score: Optional[int]
     category: RiskCategory
+    risk_level: UiRiskLevel
+    flags: List[str]
     components: News2Components
     missing_fields: List[str]
     spo2_scale: Literal["Scale1"]
     defaults_used: Dict[str, Any]
     inputs_used: Dict[str, Any]
+
+
+def _to_ui_risk_level(category: RiskCategory) -> UiRiskLevel:
+    if category == "Medium":
+        return "Moderate"
+    return category  # type: ignore[return-value]
+
+
+def _build_flags(
+    *,
+    category: RiskCategory,
+    components: News2Components,
+    inputs_used: Dict[str, Any],
+    defaults_used: Dict[str, Any],
+    missing_fields: List[str],
+) -> List[str]:
+    flags: List[str] = []
+
+    if category == "Insufficient Data":
+        if missing_fields:
+            flags.append(f"Insufficient data for NEWS2: missing {', '.join(missing_fields)}")
+        return flags
+
+    # Deterministic “why” flags from non-zero components.
+    def add_if(component_key: str, label: str) -> None:
+        points = components.get(component_key)
+        if points is None or points == 0:
+            return
+        value = inputs_used.get(component_key)
+        if value is None:
+            flags.append(f"{label} (+{points})")
+        else:
+            flags.append(f"{label} {value} (+{points})")
+
+    add_if("spo2", "Low SpO2")
+    add_if("resp_rate", "Abnormal respiratory rate")
+    add_if("on_oxygen", "On supplemental oxygen")
+    add_if("temp_c", "Abnormal temperature (C)")
+    add_if("systolic_bp", "Abnormal systolic BP")
+    add_if("heart_rate", "Abnormal heart rate")
+    add_if("consciousness", "Altered consciousness/new confusion")
+
+    # Always disclose demo defaults if used.
+    for key, meta in defaults_used.items():
+        flags.append(f"Demo default applied: {key} ({meta.get('reason')})")
+
+    return flags
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -285,9 +335,18 @@ def compute_news2_score(patient: Dict[str, Any]) -> News2Result:
     components, defaults_used, inputs_used = compute_news2_components(patient)
     missing = [k for k, v in components.items() if v is None]
     if missing:
+        category: RiskCategory = "Insufficient Data"
         return {
             "score": None,
-            "category": "Insufficient Data",
+            "category": category,
+            "risk_level": _to_ui_risk_level(category),
+            "flags": _build_flags(
+                category=category,
+                components=components,
+                inputs_used=inputs_used,
+                defaults_used=defaults_used,
+                missing_fields=missing,
+            ),
             "components": components,
             "missing_fields": missing,
             "spo2_scale": "Scale1",
@@ -307,6 +366,14 @@ def compute_news2_score(patient: Dict[str, Any]) -> News2Result:
     return {
         "score": score,
         "category": category,
+        "risk_level": _to_ui_risk_level(category),
+        "flags": _build_flags(
+            category=category,
+            components=components,
+            inputs_used=inputs_used,
+            defaults_used=defaults_used,
+            missing_fields=[],
+        ),
         "components": components,
         "missing_fields": [],
         "spo2_scale": "Scale1",
