@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const riskEngine = require("./riskEngine");
-const summaryGenerator = require("./summaryGenerator");
+const { analyzePatient } = require("./analyze");
 
 const app = express();
 const PORT = 3001;
@@ -159,26 +158,26 @@ app.post("/patients/analyze", (req, res) => {
   !patientData ||
   patientData.age == null ||
   !patientData.vitals ||
-  patientData.vitals.bloodPressureSystolic == null ||
   patientData.vitals.bmi == null
 ) {
   return res.status(400).json({
     error: "Missing required patient data",
-    requiredFields: ["age", "vitals.bloodPressureSystolic", "vitals.bmi"],
+    requiredFields: ["age", "vitals.bmi"],
   });
 }
 
-  const analysis = riskEngine.analyze(patientData);
-  const summary = summaryGenerator.generate(patientData, analysis.flags);
-
-  res.status(201).json({
-    message: "Patient analyzed successfully",
-    patient: patientData,
-    riskScore: analysis.score,
-    riskLevel: analysis.level === "Medium" ? "Moderate" : analysis.level,
-    riskFlags: analysis.flags,
-    summary,
-  });
+  void analyzePatient(patientData)
+    .then((result) => {
+      res.status(201).json({
+        message: "Patient analyzed successfully",
+        patient: patientData,
+        ...result,
+      });
+    })
+    .catch((err) => {
+      console.error("[patients/analyze] Failed to analyze patient:", err);
+      res.status(500).json({ error: "Failed to analyze patient" });
+    });
 });
 
 app.listen(PORT, () => {
