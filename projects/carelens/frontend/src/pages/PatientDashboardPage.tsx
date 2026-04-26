@@ -79,7 +79,7 @@ export default function PatientDashboardPage() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-7">
       <Link
         to="/"
         className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700 transition hover:text-brand-800"
@@ -89,13 +89,13 @@ export default function PatientDashboardPage() {
       </Link>
 
       <article className="overflow-hidden rounded-lg border border-sky-100 bg-white shadow-panel">
-        <div className="border-b border-sky-100 bg-gradient-to-r from-sky-50 via-white to-teal-50 px-6 py-7 md:px-8">
+        <div className="border-b border-sky-100 bg-white px-6 py-7 md:px-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand-700">
                 Patient Overview
               </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-800 md:text-4xl">
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
                 {patient.name}
               </h1>
               <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -105,7 +105,7 @@ export default function PatientDashboardPage() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div
-                className={`rounded-lg border px-4 py-3 ${
+                className={`rounded-lg border px-4 py-3 shadow-sm ${
                   riskLevel ? riskStyles[riskLevel] : "border-slate-200 bg-white text-slate-600"
                 }`}
               >
@@ -116,7 +116,7 @@ export default function PatientDashboardPage() {
                 <p className="mt-1 text-xs opacity-80">Current risk level</p>
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-slate-700">
+              <div className="rounded-lg border border-sky-100 bg-sky-50/60 px-4 py-3 text-slate-700 shadow-sm">
                 <p className="text-sm font-semibold">Risk Score</p>
                 <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
                   {assessment?.riskScore ?? "N/A"}
@@ -137,7 +137,7 @@ export default function PatientDashboardPage() {
               type="button"
               onClick={handleAnalyzePatient}
               disabled={isAnalyzing}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-brand-400"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-brand-400"
             >
               {isAnalyzing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -159,13 +159,13 @@ export default function PatientDashboardPage() {
 
       <VitalsCard vitals={patient.vitals} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         <ConditionsCard conditions={patient.conditions} />
         <MedicationsCard medications={patient.medications} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
-        <article className="flex h-full flex-col rounded-lg border border-slate-200 bg-white p-6 shadow-panel">
+      <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
+        <article className="flex h-full flex-col rounded-lg border border-sky-100 bg-white p-6 shadow-panel">
           <div>
             <h2 className="text-lg font-semibold tracking-tight text-slate-800">Risk Flags</h2>
             <p className="text-sm text-slate-500">Factors contributing to the latest score</p>
@@ -174,7 +174,7 @@ export default function PatientDashboardPage() {
             {assessment?.flags.length ? (
               assessment.flags.map((flag) => <RiskBadge key={flag} flag={flag} />)
             ) : (
-              <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm text-slate-500">
                 No risk flags are available.
               </div>
             )}

@@ -7,7 +7,7 @@ interface SummaryCardProps {
 
 export default function SummaryCard({ summary, className = "" }: SummaryCardProps) {
   return (
-    <article className={`rounded-lg border border-slate-200 bg-white p-6 shadow-panel ${className}`}>
+    <article className={`rounded-lg border border-sky-100 bg-white p-6 shadow-panel ${className}`}>
       <div className="flex items-center gap-3">
         <div className="rounded-lg bg-brand-50 p-3 text-brand-700">
           <FileText className="h-5 w-5" />

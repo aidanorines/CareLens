@@ -6,7 +6,7 @@ interface MedicationsCardProps {
 
 export default function MedicationsCard({ medications }: MedicationsCardProps) {
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-panel">
+    <article className="rounded-lg border border-sky-100 bg-white p-5 shadow-panel sm:p-6">
       <div className="flex items-center gap-3">
         <div className="rounded-lg bg-teal-50 p-3 text-teal-700">
           <Pill className="h-5 w-5" />
@@ -21,7 +21,7 @@ export default function MedicationsCard({ medications }: MedicationsCardProps) {
         {medications.map((medication) => (
           <li
             key={medication}
-            className="rounded-lg border border-slate-100 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm"
+            className="rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm font-medium text-slate-700"
           >
             {medication}
           </li>

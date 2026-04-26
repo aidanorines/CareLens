@@ -7,7 +7,7 @@ interface AssessmentHistoryProps {
 
 export default function AssessmentHistory({ assessments, className = "" }: AssessmentHistoryProps) {
   return (
-    <article className={`rounded-lg border border-slate-200 bg-white p-6 shadow-panel ${className}`}>
+    <article className={`rounded-lg border border-sky-100 bg-white p-6 shadow-panel ${className}`}>
       <div>
         <h2 className="text-lg font-semibold tracking-tight text-slate-800">
           Assessment History
@@ -20,7 +20,7 @@ export default function AssessmentHistory({ assessments, className = "" }: Asses
           assessments.map((assessment) => (
             <li
               key={assessment.id}
-              className="flex flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div>
                 <p className="text-sm font-semibold text-slate-800">
