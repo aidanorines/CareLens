@@ -1,22 +1,54 @@
 function normalizePatientData(rawData) {
   const data = parseInput(rawData);
 
+  if (isCcdaDocument(data)) {
+    return normalizeCCDA(data);
+  }
+
+  if (isFhirData(data)) {
+    return normalizeFHIR(data);
+  }
+
+  return normalizeSimplifiedPatient(data);
+}
+
+function normalizeFHIR(rawData) {
+  const data = parseInput(rawData);
+
   if (data?.resourceType === "Bundle") {
-    return normalizeBundle(data);
+    return normalizeFhirBundle(data);
   }
 
   if (data?.resourceType === "Patient") {
     return normalizeFhirPatient(data);
   }
 
-  if (data?.ClinicalDocument || data?.clinicaldocument) {
-    return normalizeCcdaDocument(data);
-  }
-
   return normalizeSimplifiedPatient(data);
 }
 
-function normalizeBundle(bundle) {
+function normalizeCCDA(rawData) {
+  const data = parseInput(rawData);
+  const document = data?.ClinicalDocument || data?.clinicaldocument || data || {};
+  const patientRole = firstArrayItem(
+    asArray(document?.recordTarget).map((target) => target?.patientRole),
+  ) || {};
+  const patient = patientRole?.patient || {};
+  const birthDate = parseCcdaDate(attributeValue(patient?.birthTime));
+  const sections = findAllByKey(document, "section");
+
+  return {
+    id: attributeValue(patientRole?.id) || generateId(),
+    name: ccdaPatientName(patient?.name) || "Unnamed Patient",
+    age: calculateAge(birthDate),
+    sex: formatCcdaSex(patient?.administrativeGenderCode),
+    conditions: uniqueStrings(extractCcdaSectionText(sections, ["problem", "condition"])),
+    medications: uniqueStrings(extractCcdaMedications(sections)),
+    vitals: extractCcdaVitals(sections),
+    encounters: uniqueStrings(extractCcdaSectionText(sections, ["encounter"])),
+  };
+}
+
+function normalizeFhirBundle(bundle) {
   const resources = Array.isArray(bundle?.entry)
     ? bundle.entry.map((entry) => entry?.resource).filter(Boolean)
     : [];
@@ -84,25 +116,6 @@ function normalizeSimplifiedPatient(data) {
   };
 }
 
-function normalizeCcdaDocument(data) {
-  const document = data?.ClinicalDocument || data?.clinicaldocument || data || {};
-  const patientRole = firstArrayItem(asArray(document?.recordTarget).map((target) => target?.patientRole)) || {};
-  const patient = patientRole?.patient || {};
-  const birthDate = parseCcdaDate(attributeValue(patient?.birthTime));
-  const sections = findAllByKey(document, "section");
-
-  return {
-    id: attributeValue(patientRole?.id) || generateId(),
-    name: ccdaPatientName(patient?.name) || "Unnamed Patient",
-    age: calculateAge(birthDate),
-    sex: formatCcdaSex(patient?.administrativeGenderCode),
-    conditions: uniqueStrings(extractCcdaSectionText(sections, ["problem", "condition"])),
-    medications: uniqueStrings(extractCcdaMedications(sections)),
-    vitals: extractCcdaVitals(sections),
-    encounters: uniqueStrings(extractCcdaSectionText(sections, ["encounter"])),
-  };
-}
-
 function parseInput(rawData) {
   if (typeof rawData !== "string") {
     return rawData || {};
@@ -113,6 +126,14 @@ function parseInput(rawData) {
   } catch {
     return {};
   }
+}
+
+function isFhirData(data) {
+  return data?.resourceType === "Bundle" || data?.resourceType === "Patient";
+}
+
+function isCcdaDocument(data) {
+  return Boolean(data?.ClinicalDocument || data?.clinicaldocument);
 }
 
 function ccdaPatientName(nameNode) {
