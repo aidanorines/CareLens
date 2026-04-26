@@ -1,28 +1,38 @@
 # CareLens
 
 ## Team Members
-- Jorge Martinez-Lopez (jorgemar723)
-- Abid Ahnaf Khan
-- Aidan Orines
-- Sabid Mahmud
+
+- [Jorge Martinez-Lopez](https://github.com/jorgemar723)
+
+- [Abid Ahnaf Khan](https://github.com/ajv163)
+
+- [Aidan Orines](https://github.com/aidanorines)
+
+- [Sabid Mahmud](https://github.com/sabidmahmud01)
 
 ---
 
 ## Problem Statement
 
-Healthcare providers often face fragmented patient data across multiple systems, making it difficult to quickly assess risk and prioritize care. This can lead to delayed interventions and increased risk for patients with complex conditions.
+Healthcare providers often rely on fragmented and complex patient data distributed across multiple systems. This makes it difficult to quickly identify high-risk patients, prioritize care, and respond to emerging health concerns in a timely manner.
+
+Without clear, centralized insights, clinicians must manually interpret vitals, conditions, and medical history, increasing the likelihood of delayed interventions and overlooked risk factors.
 
 ---
 
 ## Solution Description
 
-CareLens is a lightweight healthcare analytics dashboard that aggregates patient data and provides real-time risk assessments. The system analyzes patient vitals, conditions, and medical history to generate:
+CareLens is a healthcare analytics dashboard designed to transform patient data into actionable insights. It aggregates key clinical information and applies a rule-based risk analysis engine to evaluate patient health in real time.
 
-- Risk scores (Low, Moderate, High)
-- Key risk flags
-- AI-assisted summaries of patient health status
+The system processes patient vitals, conditions, and encounter history to generate:
 
-This helps clinicians quickly understand patient risk and make more informed decisions.
+- Risk scores categorized as Low, Moderate, or High
+- Key risk flags highlighting potential clinical concerns
+- AI-assisted summaries that provide a clear, human-readable overview of patient risk
+
+By simplifying complex patient data into intuitive insights, CareLens helps clinicians quickly identify high-risk individuals and make more informed, timely decisions.
+
+While the current implementation uses synthetic data for demonstration purposes, the system is designed to support future integration with real-world healthcare data standards such as FHIR.
 
 ---
 
